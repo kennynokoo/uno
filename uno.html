@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Nunito Sans', 'Inter', sans-serif;
+            touch-action: manipulation;
+            background-color: #E9E9E9;
+            color: #333;
+        }
+        .action-icon { width: 60%; height: 60%; fill: white; }
+        .action-icon.text-black { fill: #222; }
+
+        .card {
+            width: 85px; height: 130px; border-radius: 12px;
+            display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+            font-weight: bold; margin: 6px; cursor: pointer;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.15);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            border: 1px solid rgba(0,0,0,0.1); position: relative; padding: 8px;
+        }
+        .card:hover {
+            transform: translateY(-8px) scale(1.05);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
+        .card .value-center { font-size: 48px; font-weight: 900; line-height: 1; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
+        .card .corner-value { position: absolute; font-size: 16px; font-weight: 700; line-height: 1; }
+        .card .top-left { top: 8px; left: 8px; }
+        .card .bottom-right { bottom: 8px; right: 8px; transform: rotate(180deg); }
+
+        .card-back {
+            background: #2D3748; border: 3px solid #4A5568; color: white;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .card-back-text {
+            font-family: 'Arial Black', Gadget, sans-serif; font-size: 36px; font-weight: bold; color: #FFD700;
+            text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 2px 2px 3px rgba(0,0,0,0.5);
+            transform: rotate(-10deg);
+        }
+
+        .card-red { background-color: #FF3B30; color: white; }
+        .card-yellow { background-color: #FFCC00; color: #333; }
+        .card-green { background-color: #4CD964; color: white; }
+        .card-blue { background-color: #007AFF; color: white; }
+        .card-black { background-color: #1C1C1E; color: white; }
+
+        .wild-center-icon {
+            width: 70%; height: 70%; border-radius: 50%;
+            background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
+            display:flex; align-items:center; justify-content:center;
+        }
+        .wild-center-icon .value-center { font-size: 28px; color: white; text-shadow: 1px 1px 2px black;}
+
+        #game-board { background-color: #F7F7F7; border-radius: 20px; }
+
+        #opponents-area-container {
+            display: flex; flex-wrap: wrap; justify-content: center;
+            min-height: 140px; /* Minimum height for the whole opponents bar */
+            padding: 10px; border-radius: 8px; width: 100%; margin-bottom: 1.5rem;
+        }
+        #opponents-area-container.one-opponent { justify-content: center; }
+        #opponents-area-container.two-opponents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; max-width: 700px; margin-left: auto; margin-right: auto; }
+        #opponents-area-container.three-opponents { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+
+        .opponent-area {
+            padding: 12px;
+            border-radius: 12px;
+            background-color: #FFFFFF;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border: 1px solid #DDD;
+            transition: border-color 0.3s, background-color 0.3s, box-shadow 0.3s;
+            min-width: 180px;
+            width: auto; /* Allow it to be sized by flex/grid parent, respecting min-width */
+            /* --- MODIFICATION START: Fixed height for opponent area --- */
+            height: 220px; /* Fixed height to accommodate opponent name and ~2 rows of cards */
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Center title and hand horizontally */
+            overflow: hidden;   /* IMPORTANT: Prevents content from breaking out and changing layout */
+            /* --- MODIFICATION END --- */
+        }
+        .opponent-area.active-turn { border-color: #007AFF; background-color: #EBF4FF; box-shadow: 0 0 12px #007AFF; }
+
+        /* --- MODIFICATION START: Ensure h3 is styled correctly within fixed height --- */
+        .opponent-area h3 {
+            flex-shrink: 0; /* Prevent the title from shrinking */
+            text-align: center; /* Ensure title is centered */
+            width: 100%; /* Make h3 take full width for centering text */
+             /* Tailwind classes from HTML: text-sm font-semibold mb-2 text-gray-700 */
+        }
+        /* --- MODIFICATION END --- */
+
+        #player-area.active-human-player-area { border: 2px solid #007AFF; box-shadow: 0 0 15px rgba(0, 122, 255, 0.7); background-color: #EBF4FF; }
+        .player-hand-container { display: flex; flex-wrap: wrap; justify-content: center; background-color: rgba(255,255,255,0.6); padding: 0.75rem; border-radius: 0.375rem; min-height: 130px; }
+
+        .opponent-hand {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center; /* Center cards horizontally */
+            align-content: flex-start; /* Align wrapped lines to the top */
+            width: 100%; /* Use full available width within opponent-area */
+            /* --- MODIFICATION START: Adjust for fixed height parent --- */
+            flex-grow: 1; /* Allow hand to take up remaining vertical space */
+            min-height: 0; /* Override the old min-height to allow flex-grow */
+            /* --- MODIFICATION END --- */
+        }
+        .opponent-hand .card { width: 50px; height: 80px; font-size: 10px; margin: 3px; padding: 4px; }
+        .opponent-hand .card .value-center { font-size: 24px; }
+        .opponent-hand .card .corner-value { font-size: 10px; top:4px; left:4px;}
+        .opponent-hand .card .bottom-right {bottom:4px; right:4px;}
+        .opponent-hand .card-back .card-back-text { font-size: 20px; }
+        .opponent-hand .card:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+
+        .discard-pile .card, .draw-pile .card { cursor: default; }
+        .discard-pile .card:hover, .draw-pile .card:hover { transform: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .playable { border: 3px solid #FFCC00 !important; box-shadow: 0 0 15px #FFCC00, 0 0 25px #FFBF24 inset !important; }
+
+        #color-picker-modal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background-color: #ffffff; padding: 30px; border-radius: 16px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.25); z-index: 1000;
+        }
+        .color-button {
+            width: 70px; height: 70px; border-radius: 50%; margin: 10px; cursor: pointer;
+            border: 4px solid #E5E7EB; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+        }
+        .color-button:hover { transform: scale(1.1); box-shadow: 0 0 12px currentColor; border-color: currentColor; }
+        .bg-red-picker { background-color: #FF3B30; border-color: #FF3B30; }
+        .bg-yellow-picker { background-color: #FFCC00; border-color: #FFCC00; }
+        .bg-green-picker { background-color: #4CD964; border-color: #4CD964; }
+        .bg-blue-picker { background-color: #007AFF; border-color: #007AFF; }
+
+        /* Message Log Styles */
+        #message-log-container { background-color: #FFFFFF; color: #333; box-shadow: 0 2px 5px rgba(0,0,0,0.06); border: 1px solid #EAEAEA; }
+        #message-area .msg { padding: 4px 8px; border-radius: 4px; margin-bottom: 4px; line-height: 1.4;}
+        #message-area .msg-turn { background-color: #EBF4FF; color: #00529B; border-left: 3px solid #007AFF; font-weight: 600;}
+        #message-area .msg-action { background-color: #E6FFFA; color: #006352; }
+        #message-area .msg-effect { background-color: #FFF3E0; color: #E65100; }
+        #message-area .msg-draw { background-color: #F3E5F5; color: #6A1B9A; }
+        #message-area .msg-uno { background-color: #FFEB3B; color: #D20000; font-weight: bold; text-align: center; padding: 6px;}
+        #message-area .msg-win { background-color: #C8E6C9; color: #2E7D32; font-weight: bold; text-align: center; padding: 8px; font-size: 1.1em;}
+        #message-area .msg-system { background-color: #ECEFF1; color: #37474F; }
+        #message-area .msg-error { background-color: #FFEBEE; color: #C62828; font-weight: bold; }
+        #message-area .msg-timeout { background-color: #FFFDE7; color: #F9A825; border-left: 3px solid #FBC02D;}
+
+
+        .current-color-indicator {
+            width: 28px; height: 28px; border-radius: 50%; display: inline-block;
+            margin-left: 12px; vertical-align: middle; border: 2px solid #BDBDBD;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        #player-setup { position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.85); z-index: 2000; }
+        .setup-button { transition: background-color 0.2s, transform 0.1s, box-shadow 0.2s; border-radius: 10px; font-weight: 600; }
+        .setup-button:hover { transform: translateY(-3px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+
+        .game-title { font-family: 'Paytone One', 'Arial Black', sans-serif; color: #007AFF; text-shadow: 1px 1px 0px #CDE6FF, 2px 2px 0px #A8D3FF; }
+        .table-bg { background-color: #34D399; border-radius: 12px; }
+
+        @keyframes cardDropToDiscardAnimation {
+            0% { transform: translateY(-80px) rotate(-15deg) scale(0.8); opacity: 0.6; }
+            60% { transform: translateY(10px) rotate(3deg) scale(1.03); opacity: 1; }
+            100% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+        }
+        .card-animate-to-discard { animation: cardDropToDiscardAnimation 0.4s cubic-bezier(0.25, 0.1, 0.25, 1.2); position: relative; z-index: 10; }
+
+        #uno-callout {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            padding: 25px 50px; background-color: #FFCC00; color: #D20000; font-size: 6rem; font-weight: 900;
+            border-radius: 25px; box-shadow: 0 0 40px rgba(0,0,0,0.6); z-index: 3000; text-align: center;
+            text-shadow: 3px 3px 0px rgba(255,255,255,0.5), -1px -1px 0 #A50000, 1px -1px 0 #A50000, -1px 1px 0 #A50000, 1px 1px 0 #A50000;
+            border: 6px solid #D20000; font-family: 'Paytone One', sans-serif;
+        }
+
+        .game-button {
+            padding: 10px 20px; border-radius: 8px; font-weight: bold; text-transform: uppercase;
+            letter-spacing: 0.5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: all 0.2s ease;
+        }
+        .game-button:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+        .game-button:active { transform: translateY(0px); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        #end-turn-button { background-color: #FFCC00; color: #4B3800; }
+        #end-turn-button:hover { background-color: #FFD733; }
+        #restart-button { background-color: #007AFF; color: white; }
+        #restart-button:hover { background-color: #005ECC; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;900&family=Paytone+One&display=swap" rel="stylesheet">
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div id="player-setup" class="fixed inset-0 bg-opacity-80 flex items-center justify-center z-2000">
+        <div class="bg-white p-8 rounded-lg shadow-xl text-center">
+            <h2 class="text-2xl font-bold mb-6 text-gray-700">選擇電腦對手數量</h2>
+            <button data-num-computers="1" class="setup-button bg-blue-500 hover:bg-blue-700 text-white py-3 px-6 m-2 text-lg">1 位電腦</button>
+            <button data-num-computers="2" class="setup-button bg-green-500 hover:bg-green-700 text-white py-3 px-6 m-2 text-lg">2 位電腦</button>
+            <button data-num-computers="3" class="setup-button bg-red-500 hover:bg-red-700 text-white py-3 px-6 m-2 text-lg">3 位電腦</button>
+        </div>
+    </div>
+
+    <div id="uno-callout" class="hidden">UNO!</div>
+
+    <div id="game-board" class="w-full max-w-7xl mx-auto p-6 rounded-xl shadow-2xl hidden">
+        <h1 class="text-5xl font-bold text-center mb-8 game-title">UNO</h1>
+
+        <div id="opponents-area-container"></div>
+
+        <div id="table-area" class="flex justify-around items-center mb-8 p-5 table-bg shadow-lg">
+            <div id="draw-pile-container" class="text-center">
+                <h3 class="text-white font-semibold text-base">抽牌堆</h3>
+                <div id="draw-pile" class="draw-pile mt-1.5"></div>
+                <p class="text-white text-sm mt-1.5">(<span id="draw-pile-count">0</span> 張)</p>
+            </div>
+
+            <div id="center-info-area" class="flex flex-col items-center justify-center text-center mx-4 px-2 py-1 rounded-md" style="background-color: rgba(0,0,0,0.1);">
+                <div id="active-player-display" class="text-white font-semibold text-lg mb-1">輪到 您 了</div>
+                <div id="center-turn-timer-display" class="text-yellow-300 font-medium text-base">思考時間: 10s</div>
+            </div>
+
+            <div id="discard-pile-container" class="text-center">
+                <h3 class="text-white font-semibold text-base">棄牌堆</h3>
+                <div id="discard-pile" class="discard-pile mt-1.5"></div>
+                 <p class="text-white text-sm mt-1.5">當前顏色: <span id="current-color-text">無</span> <span id="current-color-indicator-ui" class="current-color-indicator"></span></p>
+            </div>
+        </div>
+
+        <div id="player-area" class="mb-6 p-3 rounded-lg transition-all duration-300 ease-in-out">
+            <h2 class="text-2xl font-semibold mb-3 text-center text-gray-800">您的手牌 (<span id="player-card-count">0</span>)</h2>
+            <div id="player-hand" class="player-hand-container flex flex-wrap justify-center bg-white/60 p-3 rounded-md"></div>
+        </div>
+
+        <div id="message-log-container" class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-6">
+            <h4 class="text-md font-semibold text-gray-700 mb-2 border-b pb-1">遊戲記錄</h4>
+            <div id="message-area" class="h-32 overflow-y-auto text-sm space-y-1 pr-2">
+                </div>
+            <div id="current-status-message" class="mt-3 text-center text-lg font-semibold text-gray-800 min-h-[1.5em] py-2 border-t pt-3">
+                </div>
+            </div>
+
+        <div id="controls" class="text-center mt-8">
+            <button id="end-turn-button" class="game-button hidden mr-4">結束回合</button>
+            <button id="restart-button" class="game-button">重新開始</button>
+        </div>
+    </div>
+
+    <div id="color-picker-modal" class="hidden">
+        <h3 class="text-2xl font-semibold mb-5 text-center text-gray-800">選擇一個顏色</h3>
+        <div class="flex justify-center">
+            <button class="color-button bg-red-picker" data-color="red"></button>
+            <button class="color-button bg-yellow-picker" data-color="yellow"></button>
+            <button class="color-button bg-green-picker" data-color="green"></button>
+            <button class="color-button bg-blue-picker" data-color="blue"></button>
+        </div>
+    </div>
+
+    <script>
+        const ICONS = {
+            skip: `<svg viewBox="0 0 100 100" class="action-icon"><circle cx="50" cy="50" r="40" stroke-width="10" stroke="currentColor" fill="none"/><line x1="25" y1="25" x2="75" y2="75" stroke-width="12" stroke="currentColor"/></svg>`,
+            reverse: `<svg viewBox="0 0 100 100" class="action-icon"><path d="M 25 50 A 25 25 0 1 1 75 50 L 75 70 L 90 50 L 75 30 L 75 50" stroke-width="10" stroke="currentColor" fill="none"/><path d="M 75 50 A 25 25 0 1 1 25 50 L 25 30 L 10 50 L 25 70 L 25 50" stroke-width="10" stroke="currentColor" fill="none" transform="rotate(180 50 50)"/></svg>`,
+            drawTwo: `<span class="value-center" style="font-size:36px; line-height:1;">+2</span>`,
+            wild: `<span class="value-center" style="font-size:36px; line-height:1;">W</span>`,
+            wildDrawFour: `<span class="value-center" style="font-size:30px; line-height:1;">W+4</span>`
+        };
+
+        const game = {
+            deck: [],
+            players: [],
+            discardPile: [],
+            currentPlayerIndex: 0,
+            currentColorInPlay: '',
+            gameDirection: 1,
+            isGameOver: false,
+            humanPlayerDrewAndCanPlay: false,
+
+            turnTimerId: null,
+            computerThinkingTimerId: null,
+            turnTimerDuration: 10000, // 10 seconds
+            turnTimeRemaining: 10,
+            turnTimerIntervalId: null,
+
+            playerSetupElement: document.getElementById('player-setup'),
+            gameBoardElement: document.getElementById('game-board'),
+            opponentsAreaContainerElement: document.getElementById('opponents-area-container'),
+            playerHandElement: document.getElementById('player-hand'),
+            playerAreaElement: document.getElementById('player-area'),
+            discardPileElement: document.getElementById('discard-pile'),
+            drawPileElement: document.getElementById('draw-pile'),
+            messageLogElement: document.getElementById('message-area'),
+            currentStatusMessageElement: document.getElementById('current-status-message'), // For prompts in log area
+            activePlayerDisplayElement: document.getElementById('active-player-display'), // For "輪到 X" in center
+            centerTurnTimerDisplayElement: document.getElementById('center-turn-timer-display'), // For timer in center
+            colorPickerModal: document.getElementById('color-picker-modal'),
+            drawPileCountElement: document.getElementById('draw-pile-count'),
+            currentColorTextElement: document.getElementById('current-color-text'),
+            currentColorIndicatorUIElement: document.getElementById('current-color-indicator-ui'),
+            unoCalloutElement: document.getElementById('uno-callout'),
+            endTurnButtonElement: document.getElementById('end-turn-button'),
+
+            init: function() {
+                this.playerSetupElement.querySelectorAll('.setup-button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const numComputers = parseInt(e.target.dataset.numComputers);
+                        this.playerSetupElement.classList.add('hidden');
+                        this.gameBoardElement.classList.remove('hidden');
+                        this.startGame(numComputers);
+                    });
+                });
+                document.getElementById('restart-button').addEventListener('click', () => {
+                     this.clearTurnTimer();
+                     this.gameBoardElement.classList.add('hidden');
+                     this.playerSetupElement.classList.remove('hidden');
+                     this.opponentsAreaContainerElement.innerHTML = ''; // Clear opponent areas
+                     this.opponentsAreaContainerElement.className = 'opponents-area-container mb-6'; // Reset classes
+                     this.endTurnButtonElement.classList.add('hidden');
+                });
+                this.colorPickerModal.querySelectorAll('.color-button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        this.selectColorForWild(e.target.dataset.color);
+                    });
+                });
+                this.endTurnButtonElement.addEventListener('click', () => {
+                    if (this.humanPlayerDrewAndCanPlay) { // Only if human drew and can pass
+                        this.clearTurnTimer();
+                        this.humanPlayerDrewAndCanPlay = false; // Reset flag
+                        this.endTurnButtonElement.classList.add('hidden');
+                        this.logMessage(`${this.players[0].name} 選擇結束回合。`, 'action');
+                        this.endPlayerTurn(0); // End human's turn
+                    }
+                });
+            },
+
+            logMessage: function(message, type = 'system') {
+                if (!this.messageLogElement) return;
+                const msgDiv = document.createElement('div');
+                msgDiv.classList.add('msg', `msg-${type}`);
+                msgDiv.innerHTML = message; // Use innerHTML to render potential spans for color
+                this.messageLogElement.appendChild(msgDiv);
+                this.messageLogElement.scrollTop = this.messageLogElement.scrollHeight;
+            },
+
+            updateCurrentStatus: function(statusMessage) { // For prompts in the log area
+                if (!this.currentStatusMessageElement) return;
+                let finalMessage = statusMessage || ""; // Default to empty string if no message
+
+                // Append current color information if relevant
+                if (this.currentColorInPlay && this.currentColorInPlay !== 'black' && this.currentColorInPlay !== '未選' && this.currentColorInPlay !== '無') {
+                    if (finalMessage) finalMessage += " "; // Add a space if there's already a message
+                    finalMessage += `(當前顏色: <span style="color:${this.getCSSColor(this.currentColorInPlay.split('-')[0])}; font-weight:bold; text-shadow: 0 0 2px rgba(255,255,255,0.7);">${this.getChineseColorName(this.currentColorInPlay)}</span>)`;
+                }
+                this.currentStatusMessageElement.innerHTML = finalMessage;
+            },
+
+            clearTurnTimer: function() {
+                if (this.turnTimerId) clearTimeout(this.turnTimerId);
+                if (this.turnTimerIntervalId) clearInterval(this.turnTimerIntervalId);
+                this.turnTimerId = null;
+                this.turnTimerIntervalId = null;
+                this.turnTimeRemaining = this.turnTimerDuration / 1000;
+                if (this.centerTurnTimerDisplayElement) this.centerTurnTimerDisplayElement.textContent = `思考時間: ${this.turnTimeRemaining}s`; // Reset central display
+                if (this.computerThinkingTimerId) { // Also clear computer thinking timer if active
+                    clearTimeout(this.computerThinkingTimerId);
+                    this.computerThinkingTimerId = null;
+                }
+            },
+
+            startTurnTimer: function(playerIndex) {
+                this.clearTurnTimer(); // Ensure any existing timers are cleared
+                const player = this.players[playerIndex];
+                this.turnTimeRemaining = this.turnTimerDuration / 1000;
+
+                // Update central timer display immediately
+                if (this.centerTurnTimerDisplayElement) {
+                    this.centerTurnTimerDisplayElement.textContent = `思考時間: ${this.turnTimeRemaining}s`;
+                    // Interval to update the displayed time remaining
+                    this.turnTimerIntervalId = setInterval(() => {
+                        this.turnTimeRemaining--;
+                        if (this.centerTurnTimerDisplayElement) this.centerTurnTimerDisplayElement.textContent = `思考時間: ${this.turnTimeRemaining}s`;
+                        if (this.turnTimeRemaining < 0) { // Allow 0 to display, then timeout
+                            clearInterval(this.turnTimerIntervalId);
+                             if (this.centerTurnTimerDisplayElement) this.centerTurnTimerDisplayElement.textContent = '超時!';
+                        }
+                    }, 1000);
+                }
+
+                // Timeout for the turn itself
+                this.turnTimerId = setTimeout(() => {
+                    // Check if game ended or player changed during the timeout
+                    if (this.isGameOver || this.currentPlayerIndex !== playerIndex) {
+                        this.clearTurnTimer(); // Just clear if no longer relevant
+                        return;
+                    }
+                    if (this.centerTurnTimerDisplayElement) this.centerTurnTimerDisplayElement.textContent = '超時!';
+                    this.logMessage(`${player.name} 超時！自動抽一張牌並結束回合。`, 'timeout');
+                    this.updateCurrentStatus(`${player.name} 超時！`); // Update prompt in log area
+                    this.makePlayerDrawCards(playerIndex, 1);
+                    this.logMessage(`${player.name} 因超時抽了一張牌。`, 'draw');
+                    this.renderPlayerHand(playerIndex); // Update hand display
+                    this.renderDrawPile(); // Update draw pile display
+
+                    if (player.hand.length === 1) { // Check for UNO after drawing
+                        this.showUnoCallout(player.name);
+                        this.logMessage(`${player.name} UNO!`, 'uno');
+                    }
+                    if (this.checkWinCondition(playerIndex)) return; // Check for win after drawing
+
+                    // If it was a computer thinking, clear its specific timer
+                    if (player.isComputer && this.computerThinkingTimerId) {
+                        clearTimeout(this.computerThinkingTimerId);
+                        this.computerThinkingTimerId = null;
+                    }
+                    this.endPlayerTurn(playerIndex); // End the turn
+                }, this.turnTimerDuration);
+            },
+
+            configurePlayers: function(numComputers) {
+                this.players = [];
+                this.players.push({ id: 'player_0', name: '您', hand: [], isComputer: false, isSkipped: false, elementIdPrefix: 'player' });
+                this.opponentsAreaContainerElement.innerHTML = ''; // Clear previous opponents
+                this.opponentsAreaContainerElement.className = 'opponents-area-container'; // Reset classes
+                if (numComputers === 1) this.opponentsAreaContainerElement.classList.add('one-opponent');
+                else if (numComputers === 2) this.opponentsAreaContainerElement.classList.add('two-opponents');
+                else if (numComputers === 3) this.opponentsAreaContainerElement.classList.add('three-opponents');
+
+                for (let i = 0; i < numComputers; i++) {
+                    const opponentId = `opponent_${i+1}`;
+                    this.players.push({ id: opponentId, name: `電腦 ${i+1}`, hand: [], isComputer: true, isSkipped: false, elementIdPrefix: opponentId });
+                    const opponentDiv = document.createElement('div');
+                    opponentDiv.id = `${opponentId}-area`;
+                    opponentDiv.classList.add('opponent-area'); // This class now has fixed height
+                    opponentDiv.innerHTML = `<h3 class="text-sm font-semibold mb-2 text-gray-700">${this.players[i+1].name} (<span id="${opponentId}-card-count">0</span>)</h3><div id="${opponentId}-hand" class="opponent-hand"></div>`;
+                    this.opponentsAreaContainerElement.appendChild(opponentDiv);
+                }
+            },
+
+            startGame: function(numComputers) {
+                this.configurePlayers(numComputers);
+                this.deck = []; this.discardPile = []; this.isGameOver = false;
+                this.currentPlayerIndex = 0; this.gameDirection = 1; this.currentColorInPlay = '';
+                this.players.forEach(p => { p.hand = []; p.isSkipped = false; });
+                this.humanPlayerDrewAndCanPlay = false; this.endTurnButtonElement.classList.add('hidden');
+
+                this.messageLogElement.innerHTML = ''; // Clear log
+                this.logMessage('正在準備新遊戲...', 'system');
+                this.activePlayerDisplayElement.textContent = '遊戲開始！'; // Initial display
+                this.updateCurrentStatus(''); // Clear prompts
+
+                this.hideColorPicker(); this.createDeck(); this.shuffleDeck(); this.dealCards();
+
+                // Draw first card for discard pile, ensure it's not Wild Draw Four
+                let firstCard = this.drawCardFromDeck();
+                while (firstCard.type === 'wildDrawFour') { // Reshuffle if W+4
+                    this.deck.unshift(firstCard); // Put back and reshuffle
+                    this.shuffleDeck();
+                    firstCard = this.drawCardFromDeck();
+                }
+                this.discardPile.push(firstCard);
+                this.currentColorInPlay = firstCard.color === 'black' ? null : firstCard.color; // Set initial color if not wild
+
+                this.renderAll();
+                if (this.discardPileElement.firstChild) this.animateCardToDiscardPile(this.discardPileElement.firstChild);
+                this.processTurnStart(firstCard); // Process effects of the first card
+            },
+
+            processTurnStart: function(initialCard = null) {
+                const currentPlayer = this.players[this.currentPlayerIndex];
+                this.activePlayerDisplayElement.textContent = `輪到 ${currentPlayer.name} 了。`;
+                let statusPromptForLog = ""; // Message for the status bar at bottom of log
+                let logMsg = ""; // Message for the main log area
+
+                if (initialCard) { // This block handles the very first card of the game
+                    logMsg = `開局牌是 ${this.getCardDisplayName(initialCard)}。`;
+                    if (initialCard.color === 'black' && initialCard.type === 'wild') { // Wild card as first card
+                        statusPromptForLog = `${currentPlayer.name} 請選擇顏色。`;
+                        logMsg += ` ${statusPromptForLog}`;
+                        this.highlightCurrentPlayerTurn();
+                        this.updateCurrentStatus(statusPromptForLog); // Update prompt in log area
+                        this.logMessage(logMsg, 'system');
+                        if (!currentPlayer.isComputer) {
+                            this.showColorPicker(false); // Human picks color
+                        } else {
+                            this.computerChooseColor(this.currentPlayerIndex, initialCard); // Computer picks color
+                        }
+                        return; // Timer starts after color choice
+                    } else if (initialCard.type !== 'number' && initialCard.color !== 'black') { // Action card as first card
+                        const { effectMsg, nextPlayerToStartChecking } = this.applyCardEffect(initialCard, -1); // -1 for game start
+                        logMsg += effectMsg;
+                        // Determine who actually starts after skips/effects
+                        const { playerIndex: actualNextPlayerIndex, message: skipLogMsg } = this.determineNextActivePlayer(nextPlayerToStartChecking, false);
+                        this.currentPlayerIndex = actualNextPlayerIndex;
+                        if(skipLogMsg) logMsg += skipLogMsg; // Add any skip messages
+                        const newCurrentPlayer = this.players[this.currentPlayerIndex];
+                        this.activePlayerDisplayElement.textContent = `輪到 ${newCurrentPlayer.name} 了。`; // Update central display
+                        logMsg += ` 輪到 ${newCurrentPlayer.name} 了。`;
+                    } else { // Number card as first card
+                         logMsg += ` 輪到 ${currentPlayer.name} 了。`;
+                    }
+                } else { // Subsequent turns
+                    logMsg = `輪到 ${currentPlayer.name} 了。`;
+                }
+
+                this.updateCurrentStatus(statusPromptForLog); // Update prompt in log area
+                this.logMessage(logMsg, 'turn');
+                this.highlightCurrentPlayerTurn();
+                this.startTurnTimer(this.currentPlayerIndex); // Start timer for the current player
+
+                if (this.players[this.currentPlayerIndex].isComputer) {
+                    if (this.computerThinkingTimerId) clearTimeout(this.computerThinkingTimerId); // Clear any old one
+                    this.computerThinkingTimerId = setTimeout(() => {
+                        this.computerThinkingTimerId = null; // Clear self
+                        // Double check it's still this computer's turn and game isn't over
+                        if (!this.isGameOver && this.players[this.currentPlayerIndex] === currentPlayer) {
+                           this.computerTurn(this.currentPlayerIndex);
+                        }
+                    }, 1800); // Computer "thinks" for 1.8 seconds
+                } else { // Human player's turn
+                    this.highlightPlayableCardsForHuman();
+                }
+            },
+
+            createDeck: function() {
+                const colors = ['red', 'yellow', 'green', 'blue'];
+                this.deck = [];
+                colors.forEach(color => {
+                    this.deck.push({ color: color, value: '0', type: 'number', display: '0' }); // One 0 card per color
+                    for (let i = 0; i < 2; i++) { // Two of each other number and action card
+                        for (let v = 1; v < 10; v++) {
+                            this.deck.push({ color: color, value: String(v), type: 'number', display: String(v) });
+                        }
+                        this.deck.push({ color: color, value: 'skip', type: 'skip', display: '🚫' });
+                        this.deck.push({ color: color, value: 'reverse', type: 'reverse', display: '🔄' });
+                        this.deck.push({ color: color, value: 'drawTwo', type: 'drawTwo', display: '+2' });
+                    }
+                });
+                // Add wild cards
+                for (let i = 0; i < 4; i++) {
+                    this.deck.push({ color: 'black', value: 'wild', type: 'wild', display: 'W' });
+                    this.deck.push({ color: 'black', value: 'wildDrawFour', type: 'wildDrawFour', display: 'W+4' });
+                }
+            },
+            shuffleDeck: function() {
+                for (let i = this.deck.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
+                }
+            },
+            dealCards: function() {
+                this.players.forEach(player => {
+                    for (let i = 0; i < 7; i++) { // Each player gets 7 cards
+                        player.hand.push(this.drawCardFromDeck());
+                    }
+                });
+            },
+            drawCardFromDeck: function() {
+                if (this.deck.length === 0) this.refillDeckFromDiscardPile();
+                if (this.deck.length === 0) { // Still empty after refill attempt
+                    this.logMessage("抽牌堆已空，無法抽牌！", 'error'); return null;
+                }
+                return this.deck.pop();
+            },
+            refillDeckFromDiscardPile: function() {
+                if (this.discardPile.length <= 1) return; // Not enough cards to refill
+                const topCard = this.discardPile.pop(); // Keep the top card
+                this.deck = [...this.discardPile]; // Move rest to deck
+                this.discardPile = [topCard]; // Reset discard pile with only top card
+                this.shuffleDeck();
+                this.logMessage("抽牌堆已空，已從棄牌堆重新洗牌。", 'system');
+                this.renderDrawPile(); // Update draw pile display
+            },
+            renderCard: function(card, isPlayerCard = true, isPlayable = false, cardIndexInHand = -1, forOpponent = false) {
+                const cardDiv = document.createElement('div');
+                cardDiv.classList.add('card');
+                let centerContentHTML = '';
+                let cornerDisplay = card.display; // Default display for corners
+
+                if (isPlayerCard) { // Actual card face
+                    cardDiv.classList.add(`card-${card.color}`);
+                    switch(card.type) {
+                        case 'number': centerContentHTML = `<span class="value-center">${card.value}</span>`; break;
+                        case 'skip': centerContentHTML = ICONS.skip; if (card.color === 'yellow') centerContentHTML = centerContentHTML.replace('class="action-icon"', 'class="action-icon text-black"'); break;
+                        case 'reverse': centerContentHTML = ICONS.reverse; if (card.color === 'yellow') centerContentHTML = centerContentHTML.replace('class="action-icon"', 'class="action-icon text-black"'); break;
+                        case 'drawTwo': centerContentHTML = ICONS.drawTwo; break;
+                        case 'wild': centerContentHTML = `<div class="wild-center-icon"><span class="value-center">W</span></div>`; cornerDisplay = 'W'; break;
+                        case 'wildDrawFour': centerContentHTML = `<div class="wild-center-icon"><span class="value-center">+4</span></div>`; cornerDisplay = 'W+4'; break;
+                        default: centerContentHTML = `<span class="value-center">${card.display}</span>`; // Fallback
+                    }
+                    cardDiv.innerHTML = `<span class="corner-value top-left">${cornerDisplay}</span>${centerContentHTML}<span class="corner-value bottom-right">${cornerDisplay}</span>`;
+                    if (isPlayable) cardDiv.classList.add('playable');
+
+                    // Add click listener only for human player's cards during their turn or if they drew and can play
+                    if (!forOpponent && this.players[0] && !this.players[0].isComputer && (this.currentPlayerIndex === 0 || this.humanPlayerDrewAndCanPlay)) {
+                         cardDiv.dataset.cardIndex = cardIndexInHand;
+                         cardDiv.addEventListener('click', () => this.handleHumanPlayCard(cardIndexInHand));
+                    } else {
+                        cardDiv.style.cursor = 'default'; // Not clickable
+                    }
+                } else { // Card back (for draw pile or opponent's hidden cards)
+                    cardDiv.classList.add('card-back');
+                    cardDiv.innerHTML = `<span class="card-back-text">UNO</span>`;
+                }
+                return cardDiv;
+            },
+            renderPlayerHand: function(playerIndex) {
+                const player = this.players[playerIndex];
+                const handElement = player.isComputer ? document.getElementById(`${player.elementIdPrefix}-hand`) : this.playerHandElement;
+                const cardCountElement = player.isComputer ? document.getElementById(`${player.elementIdPrefix}-card-count`) : document.getElementById('player-card-count');
+
+                if (!handElement || !cardCountElement) { console.error("Hand or count element not found for", player.name); return; }
+
+                handElement.innerHTML = ''; // Clear current hand display
+                const topDiscard = this.getTopDiscardCard();
+
+                player.hand.forEach((card, index) => {
+                    if (player.isComputer) {
+                        // For computer, always render card back. The opponent-hand .card CSS handles sizing.
+                        handElement.appendChild(this.renderCard({}, false, false, -1, true));
+                    } else { // Human player
+                        const isPlayable = (this.currentPlayerIndex === playerIndex || this.humanPlayerDrewAndCanPlay) && this.isCardPlayable(card, topDiscard);
+                        handElement.appendChild(this.renderCard(card, true, isPlayable, index, false));
+                    }
+                });
+                cardCountElement.textContent = player.hand.length;
+            },
+            renderAllPlayerHands: function() { this.players.forEach((_, index) => this.renderPlayerHand(index)); },
+            renderDiscardPile: function() {
+                this.discardPileElement.innerHTML = '';
+                const topCard = this.getTopDiscardCard();
+                if (topCard) {
+                    const cardDiv = this.renderCard(topCard, true, false, -1, true); // Render as non-playable, for display
+                    cardDiv.style.cursor = 'default'; // Not clickable
+                    this.discardPileElement.appendChild(cardDiv);
+                }
+                this.updateCurrentColorDisplay(); // Update color indicator
+            },
+            animateCardToDiscardPile: function(cardElement) {
+                 if (cardElement) { cardElement.classList.remove('card-animate-to-discard'); void cardElement.offsetWidth; cardElement.classList.add('card-animate-to-discard'); }
+            },
+            updateCurrentColorDisplay: function() {
+                const topDiscard = this.getTopDiscardCard();
+                let displayColor = this.currentColorInPlay; // Prioritize chosen wild color
+
+                if (!displayColor && topDiscard && topDiscard.color !== 'black') displayColor = topDiscard.color; // Fallback to top card's color
+                else if (!displayColor && topDiscard && topDiscard.color === 'black') displayColor = '未選'; // Wild card on top, color not yet chosen
+
+                this.currentColorTextElement.textContent = this.getChineseColorName(displayColor || '無');
+                this.currentColorIndicatorUIElement.className = 'current-color-indicator'; // Reset classes
+                if (displayColor && displayColor !== '未選' && displayColor !== '無') {
+                    this.currentColorIndicatorUIElement.style.backgroundColor = this.getCSSColor(displayColor.split('-')[0]); // Handle "red-picker" etc.
+                } else {
+                    this.currentColorIndicatorUIElement.style.backgroundColor = '#BDBDBD'; // Default grey
+                }
+            },
+            getCSSColor: function(colorName) { // Helper for consistent color codes
+                switch (colorName) {
+                    case 'red': return '#FF3B30'; case 'yellow': return '#FFCC00'; case 'green': return '#4CD964';
+                    case 'blue': return '#007AFF'; case 'black': return '#1C1C1E'; default: return '#BDBDBD';
+                }
+            },
+            renderDrawPile: function() {
+                this.drawPileElement.innerHTML = '';
+                if (this.deck.length > 0) {
+                    const cardBack = this.renderCard({}, false); // Render card back
+                    // Make draw pile clickable only for human player during their turn AND if they haven't drawn yet this turn
+                    if (this.players[0] && this.currentPlayerIndex === 0 && !this.players[0].isComputer && !this.humanPlayerDrewAndCanPlay) {
+                        cardBack.addEventListener('click', () => this.handleHumanDrawCard());
+                        cardBack.style.cursor = 'pointer';
+                    } else { cardBack.style.cursor = 'default'; }
+                    this.drawPileElement.appendChild(cardBack);
+                } else { this.drawPileElement.textContent = '空'; } // Show "Empty" if no cards
+                this.drawPileCountElement.textContent = this.deck.length;
+            },
+            renderAll: function() {
+                if(this.isGameOver) return; // Don't re-render if game is over
+                this.renderAllPlayerHands(); this.renderDiscardPile(); this.renderDrawPile();
+            },
+            highlightPlayableCardsForHuman: function() {
+                 // Only re-render human hand to update playable status if it's their turn or they drew and can play
+                 if (this.players[0] && (this.currentPlayerIndex === 0 || this.humanPlayerDrewAndCanPlay) && !this.players[0].isComputer) this.renderPlayerHand(0);
+            },
+            highlightCurrentPlayerTurn: function() {
+                this.players.forEach((player, index) => {
+                    const areaElement = document.getElementById(`${player.elementIdPrefix}-area`);
+                    if (areaElement && player.isComputer) areaElement.classList.toggle('active-turn', index === this.currentPlayerIndex);
+                });
+                // Highlight human player area
+                if (this.players[0]) this.playerAreaElement.classList.toggle('active-human-player-area', this.currentPlayerIndex === 0 && !this.players[0].isComputer);
+            },
+            getChineseColorName: function(color) {
+                if (!color) return '無';
+                switch (color.replace('-picker','')) { // Remove picker suffix if present
+                    case 'red': return '紅色'; case 'yellow': return '黃色'; case 'green': return '綠色';
+                    case 'blue': return '藍色'; case 'black': return '黑色 (萬用)'; default: return color; // Fallback
+                }
+            },
+            getCardDisplayName: function(card) {
+                if (!card) return '';
+                const colorName = card.color === 'black' ? '' : this.getChineseColorName(card.color);
+                let valueName = card.display; // Use display for numbers
+                switch(card.type) { // Use Chinese names for actions
+                    case 'skip': valueName = '禁止'; break; case 'reverse': valueName = '反轉'; break;
+                    case 'drawTwo': valueName = '+2'; break; case 'wild': valueName = '萬用牌'; break;
+                    case 'wildDrawFour': valueName = '王牌+4'; break;
+                }
+                return `${colorName} ${valueName}`.trim();
+            },
+            isCardPlayable: function(cardToPlay, topDiscardCard) {
+                if (!topDiscardCard) return true; // Can play anything if discard pile is empty (should not happen after 1st card)
+                if (cardToPlay.color === 'black') return true; // Wild cards are always playable
+                if (this.currentColorInPlay) return cardToPlay.color === this.currentColorInPlay || cardToPlay.value === topDiscardCard.value; // Match chosen wild color OR value
+                return cardToPlay.color === topDiscardCard.color || cardToPlay.value === topDiscardCard.value; // Match color OR value
+            },
+            getTopDiscardCard: function() { return this.discardPile.length > 0 ? this.discardPile[this.discardPile.length - 1] : null; },
+            getNextPlayerIndex: function(currentIndex, direction) {
+                if (currentIndex === -1) return direction === 1 ? 0 : this.players.length - 1; // For initial card effect
+                let nextIndex = currentIndex + direction;
+                if (nextIndex >= this.players.length) nextIndex = 0; // Wrap around (forward)
+                if (nextIndex < 0) nextIndex = this.players.length - 1; // Wrap around (backward)
+                return nextIndex;
+            },
+            determineNextActivePlayer: function(startingPlayerIndex, advanceOneStep = false) {
+                // This function finds the next player who is NOT skipped.
+                // startingPlayerIndex is where to begin checking (usually the player after the one who just played/was affected).
+                // advanceOneStep: if true, moves one step first, then checks for skips.
+                let nextIdx = advanceOneStep ? this.getNextPlayerIndex(startingPlayerIndex, this.gameDirection) : startingPlayerIndex;
+                let effectMessage = ""; // To log any auto-skips
+                if (nextIdx < 0 || nextIdx >= this.players.length) { nextIdx = 0; } // Safety check
+
+                // Loop until a non-skipped player is found
+                while (this.players[nextIdx].isSkipped) {
+                    this.players[nextIdx].isSkipped = false; // Consume the skip
+                    effectMessage += ` ${this.players[nextIdx].name} 先前被標記的回合被跳過。`;
+                    nextIdx = this.getNextPlayerIndex(nextIdx, this.gameDirection); // Move to the next one
+                }
+                return { playerIndex: nextIdx, message: effectMessage };
+            },
+
+            handleHumanPlayCard: function(cardIndexInHand) {
+                if (this.isGameOver || (this.currentPlayerIndex !== 0 && !this.humanPlayerDrewAndCanPlay) || !this.players[0] || this.players[0].isComputer) return;
+
+                const player = this.players[0];
+                const card = player.hand[cardIndexInHand];
+                const topDiscard = this.getTopDiscardCard();
+
+                if (this.isCardPlayable(card, topDiscard)) {
+                    this.clearTurnTimer(); // Played a card, stop timer
+
+                    player.hand.splice(cardIndexInHand, 1); // Remove card from hand
+                    this.discardPile.push(card); // Add to discard pile
+                    const cardName = this.getCardDisplayName(card);
+                    this.logMessage(`${player.name} 出了 ${cardName}.`, 'action');
+
+                    this.currentColorInPlay = card.color === 'black' ? null : card.color; // Update current color if not wild
+                    this.humanPlayerDrewAndCanPlay = false; // Reset flag
+                    this.endTurnButtonElement.classList.add('hidden'); // Hide end turn button
+
+                    this.renderAll(); // Update display
+                    if (this.discardPileElement.firstChild) this.animateCardToDiscardPile(this.discardPileElement.firstChild);
+
+                    if (card.color === 'black') { // Wild card played
+                        this.updateCurrentStatus("請選擇一個顏色。"); // Prompt in log area
+                        this.showColorPicker(card.type === 'wildDrawFour'); // Show color picker
+                        return; // Next player's turn starts after color selection
+                    }
+                    this.processCardPlay(card, 0); // Process card effects and move to next player
+                } else {
+                    this.logMessage("這張牌不能出！", 'error');
+                    this.updateCurrentStatus("請選擇其他牌或抽牌。"); // Prompt in log area
+                }
+            },
+
+            handleHumanDrawCard: function() {
+                if (this.isGameOver || this.currentPlayerIndex !== 0 || !this.players[0] || this.players[0].isComputer || this.humanPlayerDrewAndCanPlay) return; // Can only draw if it's your turn and you haven't drawn/played
+
+                this.clearTurnTimer(); // Drawing, stop current timer phase
+
+                const player = this.players[0];
+                const drawnCard = this.drawCardFromDeck();
+                if (drawnCard) {
+                    player.hand.push(drawnCard);
+                    const drawnCardName = this.getCardDisplayName(drawnCard);
+                    this.logMessage(`${player.name} 抽了一張牌: ${drawnCardName}.`, 'draw');
+
+                    const topDiscard = this.getTopDiscardCard();
+                    if (this.isCardPlayable(drawnCard, topDiscard)) {
+                         this.updateCurrentStatus(`您可以立即打出 ${drawnCardName}，或點擊【結束回合】。`); // Prompt in log area
+                         this.humanPlayerDrewAndCanPlay = true; // Flag that human drew and can play/pass
+                         this.endTurnButtonElement.classList.remove('hidden'); // Show end turn button
+                         this.renderAll(); // Update display (highlights playable drawn card)
+                         this.highlightPlayableCardsForHuman(); // Specifically re-render human hand
+                         this.startTurnTimer(0); // Restart timer for human to decide (play drawn card or pass)
+                    } else { // Drawn card cannot be played
+                        this.updateCurrentStatus(`抽到的牌無法立即打出。回合結束。`); // Prompt in log area
+                        this.renderAll(); // Update display
+                        this.endPlayerTurn(0); // End turn
+                    }
+                } else { // No card could be drawn (deck empty)
+                    this.updateCurrentStatus(`${player.name} 無法抽牌。回合結束。`); // Prompt in log area
+                    this.logMessage(`${player.name} 無法抽牌 (牌堆可能已空)。`, 'error');
+                    this.endPlayerTurn(0); // End turn
+                }
+            },
+
+            processCardPlay: function(playedCard, playerIndexWhoPlayed) {
+                // This function is called after a card is successfully played (and color chosen for wilds)
+                let effectLog = "";
+                let nextPlayerToStartChecking; // Index of player potentially affected by card (skip, draw)
+
+                if (playedCard.type === 'number' || (playedCard.type === 'wild' && this.currentColorInPlay)) { // Number card or regular Wild (color chosen)
+                    nextPlayerToStartChecking = this.getNextPlayerIndex(playerIndexWhoPlayed, this.gameDirection);
+                } else { // Action card (Skip, Reverse, DrawTwo, WildDrawFour)
+                    const effectResult = this.applyCardEffect(playedCard, playerIndexWhoPlayed);
+                    effectLog = effectResult.effectMsg;
+                    if (effectLog) this.logMessage(effectLog.trim(), 'effect');
+                    nextPlayerToStartChecking = effectResult.nextPlayerToStartChecking;
+                }
+
+                if (this.checkWinCondition(playerIndexWhoPlayed)) return; // Check for win
+
+                if (this.players[playerIndexWhoPlayed].hand.length === 1) { // Check for UNO
+                    this.logMessage(`${this.players[playerIndexWhoPlayed].name} UNO!`, 'uno');
+                    this.showUnoCallout(this.players[playerIndexWhoPlayed].name);
+                }
+
+                // Determine the actual next player after considering skips
+                const { playerIndex: actualNextPlayerIndex, message: skipLogMsg } = this.determineNextActivePlayer(nextPlayerToStartChecking, false);
+                if (skipLogMsg) this.logMessage(skipLogMsg.trim(), 'effect'); // Log if any players were skipped due to previous effects
+                this.currentPlayerIndex = actualNextPlayerIndex;
+
+                const nextPlayer = this.players[this.currentPlayerIndex];
+                this.activePlayerDisplayElement.textContent = `輪到 ${nextPlayer.name} 了。`; // Update central display
+                this.updateCurrentStatus(''); // Clear specific prompts from log area, color will be added if applicable
+                this.logMessage(`輪到 ${nextPlayer.name} 了。`, 'turn');
+
+                this.renderAll(); // Full re-render for new turn state
+                this.highlightCurrentPlayerTurn(); // Highlight new current player
+                this.startTurnTimer(this.currentPlayerIndex); // Start timer for the new player
+
+                if (nextPlayer.isComputer) {
+                    if (this.computerThinkingTimerId) clearTimeout(this.computerThinkingTimerId);
+                    this.computerThinkingTimerId = setTimeout(() => {
+                        this.computerThinkingTimerId = null;
+                        if (!this.isGameOver && this.players[this.currentPlayerIndex] === nextPlayer) { // Still this computer's turn
+                           this.computerTurn(this.currentPlayerIndex);
+                        }
+                    }, 1800);
+                } else { // Human's turn
+                    this.highlightPlayableCardsForHuman();
+                }
+            },
+
+            applyCardEffect: function(card, playerIndexWhoPlayed) {
+                // playerIndexWhoPlayed = -1 if it's the game's first card effect
+                let effectMsg = "";
+                // Target player for Skip/DrawTwo/DrawFour is the *next* player in sequence
+                const targetPlayerIndex = playerIndexWhoPlayed === -1 ? 0 : this.getNextPlayerIndex(playerIndexWhoPlayed, this.gameDirection);
+                // Player to start checking for turn *after* effect
+                let nextPlayerToStartChecking = this.getNextPlayerIndex(targetPlayerIndex, this.gameDirection);
+
+                switch (card.type) {
+                    case 'skip':
+                        effectMsg = ` ${this.players[targetPlayerIndex].name} 的回合被跳過。`;
+                        // Skip the target player, next player is already calculated
+                        break;
+                    case 'reverse':
+                        if (this.players.length === 2) { // In 2-player game, reverse acts like skip
+                            effectMsg = ` 反轉！${this.players[targetPlayerIndex].name} 的回合被跳過。`;
+                            nextPlayerToStartChecking = playerIndexWhoPlayed === -1 ? 0 : playerIndexWhoPlayed; // Turn returns to player who played reverse
+                        } else { // More than 2 players
+                            this.gameDirection *= -1; // Reverse direction
+                            effectMsg = ` 方向反轉！`;
+                            // Next player is now in the new direction from who played
+                            nextPlayerToStartChecking = this.getNextPlayerIndex(playerIndexWhoPlayed === -1 ? 0 : playerIndexWhoPlayed, this.gameDirection);
+                        }
+                        break;
+                    case 'drawTwo':
+                        this.makePlayerDrawCards(targetPlayerIndex, 2);
+                        effectMsg = ` ${this.players[targetPlayerIndex].name} 抽兩張牌，回合結束。`;
+                        this.logMessage(`${this.players[targetPlayerIndex].name} 抽了 2 張牌。`, 'draw');
+                        // Skip the target player, next player is already calculated
+                        break;
+                    case 'wild': // Regular wild, color is chosen, no other effect here
+                        // Next player is simply next in current direction from who played
+                        nextPlayerToStartChecking = this.getNextPlayerIndex(playerIndexWhoPlayed, this.gameDirection);
+                        break;
+                    case 'wildDrawFour':
+                        this.makePlayerDrawCards(targetPlayerIndex, 4);
+                        effectMsg = ` ${this.players[targetPlayerIndex].name} 抽四張牌，回合結束。`;
+                        this.logMessage(`${this.players[targetPlayerIndex].name} 抽了 4 張牌。`, 'draw');
+                        // Skip the target player, next player is already calculated
+                        break;
+                }
+                return { effectMsg, nextPlayerToStartChecking };
+            },
+
+            makePlayerDrawCards: function(playerIndex, numCards) {
+                if (this.isGameOver) return;
+                const player = this.players[playerIndex];
+                for (let i = 0; i < numCards; i++) {
+                    const card = this.drawCardFromDeck();
+                    if (card) player.hand.push(card); else break; // Stop if deck runs out
+                }
+            },
+
+            selectColorForWild: function(chosenColor) {
+                this.clearTurnTimer(); // Color chosen, stop any intermediate timer
+
+                this.hideColorPicker();
+                const cardPlayed = this.getTopDiscardCard(); // Should be the wild card
+                this.currentColorInPlay = chosenColor; // Set the chosen color
+
+                const playerName = this.players[this.currentPlayerIndex].name; // Player who chose
+                this.logMessage(`${playerName} 選擇了 ${this.getChineseColorName(chosenColor)}.`, 'action');
+                this.updateCurrentStatus(`${playerName} 選擇了 ${this.getChineseColorName(chosenColor)}.`); // Update prompt in log area
+
+                // Now process the wild card play with the chosen color
+                this.processCardPlay(cardPlayed, this.currentPlayerIndex);
+            },
+
+            computerChooseColor: function(playerIndex, cardPlayed) { // cardPlayed is the Wild or W+4
+                const computer = this.players[playerIndex];
+                const colorCounts = { red: 0, yellow: 0, green: 0, blue: 0 };
+                // Count colors in hand (excluding black)
+                computer.hand.forEach(card => {
+                    if (card.color !== 'black' && colorCounts.hasOwnProperty(card.color)) colorCounts[card.color]++;
+                });
+                let bestColor = 'red'; // Default
+                let maxCount = -1;
+                const availableColors = Object.keys(colorCounts).filter(c => colorCounts[c] > 0);
+
+                if (availableColors.length === 0) { // No colored cards, pick randomly
+                    const allColors = ['red', 'yellow', 'green', 'blue'];
+                    bestColor = allColors[Math.floor(Math.random() * allColors.length)];
+                } else { // Pick the color it has most of
+                    for (const color in colorCounts) if (colorCounts[color] > maxCount) { maxCount = colorCounts[color]; bestColor = color; }
+                }
+                this.currentColorInPlay = bestColor;
+                this.logMessage(`${computer.name} 選擇了 ${this.getChineseColorName(bestColor)}.`, 'action');
+                // No need to update currentStatusMessageElement here, processCardPlay will set next turn info.
+
+                this.processCardPlay(cardPlayed, playerIndex); // Process the wild card with chosen color
+            },
+
+            endPlayerTurn: function(playerIndexWhoEnded) {
+                // This is called when a player's turn ends naturally (e.g., after drawing and not playing, or timeout)
+                this.clearTurnTimer();
+
+                this.humanPlayerDrewAndCanPlay = false; // Reset this flag
+                this.endTurnButtonElement.classList.add('hidden'); // Hide button
+
+                // Determine the next player, considering game direction and any existing skips
+                const { playerIndex: actualNextPlayerIndex, message: skipLogMsg } = this.determineNextActivePlayer(
+                    this.getNextPlayerIndex(playerIndexWhoEnded, this.gameDirection), false // Start check from next in sequence
+                );
+                if (skipLogMsg) this.logMessage(skipLogMsg.trim(), 'effect'); // Log if anyone was skipped
+                this.currentPlayerIndex = actualNextPlayerIndex;
+
+                const nextPlayer = this.players[this.currentPlayerIndex];
+                this.activePlayerDisplayElement.textContent = `輪到 ${nextPlayer.name} 了。`;
+                this.updateCurrentStatus(''); // Clear specific prompts from log area
+                this.logMessage(`輪到 ${nextPlayer.name} 了。`, 'turn');
+
+                this.renderAll();
+                this.highlightCurrentPlayerTurn();
+                this.startTurnTimer(this.currentPlayerIndex); // Start timer for the new player
+
+                if (nextPlayer.isComputer) {
+                    if (this.computerThinkingTimerId) clearTimeout(this.computerThinkingTimerId);
+                    this.computerThinkingTimerId = setTimeout(() => {
+                        this.computerThinkingTimerId = null;
+                        if (!this.isGameOver && this.players[this.currentPlayerIndex] === nextPlayer) {
+                           this.computerTurn(this.currentPlayerIndex);
+                        }
+                    }, 1800);
+                } else { // Human's turn
+                    this.highlightPlayableCardsForHuman();
+                }
+            },
+
+            checkWinCondition: function(playerIndex) {
+                if (this.players[playerIndex].hand.length === 0) {
+                    this.clearTurnTimer();
+                    this.isGameOver = true;
+                    const winnerName = this.players[playerIndex].name;
+                    this.logMessage(`${winnerName} 獲勝！遊戲結束。`, 'win');
+                    this.activePlayerDisplayElement.textContent = `${winnerName} 獲勝！`; // Update center display
+                    this.updateCurrentStatus(`按「重新開始」再玩一局。`); // Update prompt in log area
+
+                    // Clear all player hands visually and show win/loss
+                    this.players.forEach((p, idx) => {
+                        const handEl = p.isComputer ? document.getElementById(`${p.elementIdPrefix}-hand`) : this.playerHandElement;
+                        if(handEl) handEl.innerHTML = `<p class='text-center p-4 text-lg font-bold ${idx === playerIndex ? "text-green-600" : "text-red-600"}'>${idx === playerIndex ? "獲勝!" : "結束"}</p>`;
+                        const countEl = p.isComputer ? document.getElementById(`${p.elementIdPrefix}-card-count`) : document.getElementById('player-card-count');
+                        if(countEl) countEl.textContent = '0';
+                    });
+                    this.endTurnButtonElement.classList.add('hidden'); // Hide end turn button
+                    return true;
+                }
+                return false;
+            },
+
+            computerTurn: function(playerIndex) {
+                // Safety checks
+                if (this.isGameOver || !this.players[playerIndex] || !this.players[playerIndex].isComputer || this.currentPlayerIndex !== playerIndex) {
+                    if (this.computerThinkingTimerId) { clearTimeout(this.computerThinkingTimerId); this.computerThinkingTimerId = null; }
+                    return;
+                }
+
+                const computer = this.players[playerIndex];
+                const topDiscard = this.getTopDiscardCard();
+                let cardToPlayObj = null; // { card, indexInHand }
+                const playableCards = [];
+
+                // Find all playable cards
+                for (let i = 0; i < computer.hand.length; i++) {
+                    if (this.isCardPlayable(computer.hand[i], topDiscard)) {
+                         // UNO rule: Cannot play Wild Draw Four if you have another card of the current color
+                         if (computer.hand[i].type === 'wildDrawFour') {
+                            const colorToMatch = this.currentColorInPlay || (topDiscard && topDiscard.color !== 'black' ? topDiscard.color : null);
+                            if (colorToMatch) { // Only check if there's a color to match
+                                const hasMatchingColorCard = computer.hand.some(c => c.color === colorToMatch && c.type !== 'wildDrawFour'); // Don't count itself
+                                if (hasMatchingColorCard) continue; // Skip this W+4 if another valid play exists
+                            }
+                        }
+                        playableCards.push({ card: computer.hand[i], indexInHand: i });
+                    }
+                }
+                // Basic strategy: play non-wild if possible, then wild, then wildDrawFour
+                if(playableCards.length > 0) cardToPlayObj = playableCards.find(p => p.card.color !== 'black') || playableCards.find(p => p.card.type === 'wild') || playableCards.find(p => p.card.type === 'wildDrawFour');
+
+
+                if (cardToPlayObj) { // Found a card to play
+                    this.clearTurnTimer();
+
+                    const playedCard = computer.hand.splice(cardToPlayObj.indexInHand, 1)[0];
+                    this.discardPile.push(playedCard);
+                    const cardName = this.getCardDisplayName(playedCard);
+                    this.logMessage(`${computer.name} 出了 ${cardName}.`, 'action');
+
+                    this.currentColorInPlay = playedCard.color === 'black' ? null : playedCard.color;
+                    this.renderAll();
+                    if (this.discardPileElement.firstChild) this.animateCardToDiscardPile(this.discardPileElement.firstChild);
+
+                    if (playedCard.color === 'black') { // Wild card played
+                        this.computerChooseColor(playerIndex, playedCard); // Computer chooses color
+                        return; // processCardPlay will be called from computerChooseColor
+                    }
+                    this.processCardPlay(playedCard, playerIndex); // Process non-wild card
+                } else { // No playable card, must draw
+                    this.clearTurnTimer();
+
+                    const drawnCard = this.drawCardFromDeck();
+                    if (drawnCard) {
+                        computer.hand.push(drawnCard);
+                        const drawnCardName = this.getCardDisplayName(drawnCard);
+                        this.logMessage(`${computer.name} 抽了一張牌 (${drawnCardName}).`, 'draw');
+
+                        // Check if drawn card is playable (and doesn't violate W+4 rule if applicable)
+                        let canPlayDrawnCard = this.isCardPlayable(drawnCard, topDiscard);
+                        if (drawnCard.type === 'wildDrawFour' && canPlayDrawnCard) {
+                            const colorToMatch = this.currentColorInPlay || (topDiscard && topDiscard.color !== 'black' ? topDiscard.color : null);
+                            if (colorToMatch) {
+                                const hasMatchingColorCard = computer.hand.some(c => c !== drawnCard && c.color === colorToMatch && c.type !== 'wildDrawFour');
+                                if (hasMatchingColorCard) canPlayDrawnCard = false;
+                            }
+                        }
+
+                        if (canPlayDrawnCard) { // Can play the drawn card
+                            const drawnCardIndexInHand = computer.hand.findIndex(c => c === drawnCard); // Should be last card
+                            if (drawnCardIndexInHand > -1) computer.hand.splice(drawnCardIndexInHand, 1); // Remove from hand
+                            else { console.error("Drawn card not found in hand for computer play"); }
+
+                            this.discardPile.push(drawnCard); // Play it
+                            this.logMessage(`${computer.name} 打出了抽到的 ${drawnCardName}.`, 'action');
+                            this.currentColorInPlay = drawnCard.color === 'black' ? null : drawnCard.color;
+                            this.renderAll();
+                            if (this.discardPileElement.firstChild) this.animateCardToDiscardPile(this.discardPileElement.firstChild);
+
+                            if (drawnCard.color === 'black') { // Drawn card was wild
+                                this.computerChooseColor(playerIndex, drawnCard);
+                                return;
+                            }
+                            this.processCardPlay(drawnCard, playerIndex); // Process drawn non-wild card
+                        } else { // Drawn card cannot be played
+                            this.logMessage(`${computer.name} 抽到的牌無法打出。回合結束。`, 'system');
+                            this.renderAll(); // Update hand display
+                            this.endPlayerTurn(playerIndex); // End turn
+                        }
+                    } else { // Cannot draw (deck empty)
+                         this.logMessage(`${computer.name} 無法抽牌 (牌堆可能已空)。回合結束。`, 'error');
+                         this.renderAll();
+                         this.endPlayerTurn(playerIndex); // End turn
+                    }
+                }
+            },
+
+            showUnoCallout: function(playerName) {
+                this.unoCalloutElement.textContent = `${playerName} UNO!`;
+                this.unoCalloutElement.classList.remove('hidden');
+                setTimeout(() => { this.unoCalloutElement.classList.add('hidden'); }, 1500); // Show for 1.5s
+            },
+            showColorPicker: function(isWildDrawFour = false) {
+                this.colorPickerModal.classList.remove('hidden');
+                this.colorPickerModal.dataset.isWildDrawFour = isWildDrawFour; // Store for later reference if needed
+            },
+            hideColorPicker: function() { this.colorPickerModal.classList.add('hidden'); }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => game.init());
+    </script>
+</body>
+</html>
