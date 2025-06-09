@@ -261,7 +261,6 @@
         }
         
         .other-player-area {
-            /* *** 修改: 設定固定高度以確保佈局一致 *** */
             height: 210px;
             overflow: hidden;
         }
@@ -298,8 +297,7 @@
         }
         
         .other-player-hand {
-            /* *** 修改: 設定固定高度以容納兩行卡牌 *** */
-            height: 172px; /* (80px card height + 6px y-margin) * 2 rows */
+            height: 172px; 
             overflow: hidden;
         }
         
@@ -799,8 +797,12 @@
 </head>
 <body class="flex flex-col items-center justify-center h-screen p-2">
     <audio id="bgm" src="/bgm.mp3" loop></audio>
+    <audio id="play-card-sound" src="/play.mp3" preload="auto"></audio>
+    <audio id="draw-card-sound" src="/draw.mp3" preload="auto"></audio>
+    <audio id="uno-sound" src="/uno.wav" preload="auto"></audio>
+    <audio id="draw-two-sound" src="/draw-two.wav" preload="auto"></audio>
+    <audio id="draw-four-sound" src="/draw-four.wav" preload="auto"></audio>
     
-    <!-- *** 新增: 按鈕容器 *** -->
     <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
         <button id="fullscreen-btn" class="p-3 rounded-full bg-slate-700/50 hover:bg-slate-600/70 transition-colors" title="全螢幕">
             <svg id="fullscreen-enter-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white">
@@ -879,7 +881,6 @@
             <div id="other-players-container" class="grid gap-4 flex-shrink-0">
             </div>
             
-            <!-- *** 修改: 增加 gap-x 來產生間距 *** -->
             <div id="table-area" class="grid grid-cols-3 items-center gap-x-8 md:gap-x-12 my-4 p-4 md:p-6 rounded-3xl shadow-2xl relative flex-shrink-0">
                 
                 <div id="draw-pile-container" class="text-center justify-self-end">
@@ -976,22 +977,40 @@
                 this.turnTimer = null;
                 this.turnTimerInterval = null;
                 this.bgm = document.getElementById('bgm');
+                this.playCardSound = document.getElementById('play-card-sound');
+                this.drawCardSound = document.getElementById('draw-card-sound');
+                this.unoSound = document.getElementById('uno-sound');
+                this.drawTwoSound = document.getElementById('draw-two-sound');
+                this.drawFourSound = document.getElementById('draw-four-sound');
                 
                 this.muteBtn = document.getElementById('mute-btn');
                 this.unmuteIcon = document.getElementById('unmute-icon');
                 this.muteIcon = document.getElementById('mute-icon');
                 this.isMuted = false;
 
-                // *** 新增: 全螢幕按鈕元素 ***
                 this.fullscreenBtn = document.getElementById('fullscreen-btn');
                 this.fullscreenEnterIcon = document.getElementById('fullscreen-enter-icon');
                 this.fullscreenExitIcon = document.getElementById('fullscreen-exit-icon');
 
                 if (this.bgm) {
-                    this.bgm.volume = 0.3;
+                    this.bgm.volume = 0.2;
                 }
+                if (this.playCardSound) this.playCardSound.volume = 0.8;
+                if (this.drawCardSound) this.drawCardSound.volume = 0.8;
+                if (this.unoSound) this.unoSound.volume = 0.8;
+                if (this.drawTwoSound) this.drawTwoSound.volume = 0.8;
+                if (this.drawFourSound) this.drawFourSound.volume = 0.8;
+
+
                 this.setupSocketListeners();
                 this.setupUIListeners();
+            }
+
+            playSound(sound) {
+                if (sound && !this.isMuted) {
+                    sound.currentTime = 0;
+                    sound.play().catch(e => console.error("音效播放失敗:", e));
+                }
             }
 
             setupSocketListeners() {
@@ -1029,6 +1048,21 @@
                     const previousPlayerId = this.gameState ? this.gameState.players[previousPlayerIndex]?.id : null;
                     
                     this.gameState = gameState;
+
+                    if (lastMove) {
+                        if (lastMove.type === 'playCard') {
+                            const topCard = gameState.discardPile[gameState.discardPile.length - 1];
+                            if (topCard.type === 'drawTwo') {
+                                this.playSound(this.drawTwoSound);
+                            } else if (topCard.type === 'wildDrawFour') {
+                                this.playSound(this.drawFourSound);
+                            } else {
+                                this.playSound(this.playCardSound);
+                            }
+                        } else if (lastMove.type === 'drawCard') {
+                            this.playSound(this.drawCardSound);
+                        }
+                    }
                     
                     if (previousPlayerIndex !== gameState.currentPlayerIndex) {
                         this.canPlayDrawnCard = false;
@@ -1074,6 +1108,7 @@
                     }
                     
                     if (result.newUnoPlayer) {
+                        this.playSound(this.unoSound);
                         const unoPlayer = this.gameState.players.find(p => p.id === result.newUnoPlayer);
                         if (unoPlayer) {
                             this.showUnoCallout(unoPlayer.name);
@@ -1187,12 +1222,10 @@
                     }
                 });
 
-                // *** 新增: 全螢幕按鈕事件 ***
                 this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
                 document.addEventListener('fullscreenchange', () => this.updateFullscreenIcon());
             }
 
-            // *** 新增: 全螢幕切換方法 ***
             toggleFullscreen() {
                 if (!document.fullscreenElement) {
                     document.documentElement.requestFullscreen().catch(err => {
@@ -1205,7 +1238,6 @@
                 }
             }
 
-            // *** 新增: 更新全螢幕圖示方法 ***
             updateFullscreenIcon() {
                 if (document.fullscreenElement) {
                     this.fullscreenEnterIcon.classList.add('hidden');
@@ -1557,7 +1589,7 @@
                 const callout = document.getElementById('uno-callout');
                 callout.textContent = `${playerName} UNO!`;
                 callout.classList.remove('hidden');
-                setTimeout(() => callout.classList.add('hidden'), 1500);
+                setTimeout(() => callout.classList.add('hidden'), 1000);
             }
 
             showSkipMessage(playerName) {
@@ -1590,7 +1622,7 @@
                 setTimeout(() => {
                     msgDiv.style.animation = 'skipBounce 0.4s ease-in reverse';
                     setTimeout(() => msgDiv.remove(), 400);
-                }, 1500);
+                }, 1000);
             }
 
             showTimeoutMessage() {
