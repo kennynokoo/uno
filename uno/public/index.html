@@ -3,83 +3,281 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UNO 多人遊戲</title>
+    <title>UNO</title>
     <link rel="icon" href="/icon.ico" type="image/x-icon">
+	<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1356046266101380"
+     crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body {
-            font-family: 'Nunito Sans', 'Inter', sans-serif;
-            touch-action: manipulation;
-            background-color: #E9E9E9;
-            color: #333;
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Bebas+Neue&family=Orbitron:wght@700;900&display=swap');
+
+        :root {
+            --primary-dark: #0a0e27;
+            --primary-light: #1a1f3a;
+            --accent-red: #ff1744;
+            --accent-yellow: #ffc107;
+            --accent-green: #00e676;
+            --accent-blue: #2979ff;
+            --accent-purple: #651fff;
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --card-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            --glow-effect: 0 0 20px;
         }
-        .action-icon { width: 60%; height: 60%; fill: white; }
-        .action-icon.text-black { fill: #222; }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            touch-action: manipulation;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(37, 121, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 23, 68, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(0, 230, 118, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .game-container {
+            position: relative;
+            z-index: 2;
+        }
+
+        .glass-panel {
+            background: rgba(26, 31, 58, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .neon-text {
+            font-family: 'Orbitron', monospace;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .action-icon { 
+            width: 60%; 
+            height: 60%; 
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
 
         .card {
-            width: 85px; height: 130px; border-radius: 12px;
-            display: flex; flex-direction: column; justify-content: space-between; align-items: center;
-            font-weight: bold; margin: 6px; cursor: pointer;
-            box-shadow: 0 5px 10px rgba(0,0,0,0.15);
-            transition: transform 0.25s ease, box-shadow 0.25s ease;
-            border: 1px solid rgba(0,0,0,0.1); position: relative; padding: 8px;
+            width: 85px; 
+            height: 130px; 
+            border-radius: 12px;
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            align-items: center;
+            font-weight: bold; 
+            margin: 6px; 
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid rgba(0,0,0,0.2); 
+            position: relative; 
+            padding: 8px;
+            transform-style: preserve-3d;
+            box-shadow: 
+                0 4px 20px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.2),
+                inset 0 -1px 0 rgba(0,0,0,0.2);
         }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, 
+                rgba(255,255,255,0.1) 0%, 
+                transparent 50%, 
+                rgba(0,0,0,0.1) 100%);
+            border-radius: 10px;
+            pointer-events: none;
+        }
+
         .card:hover {
-            transform: translateY(-8px) scale(1.05);
-            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            transform: translateY(-12px) scale(1.08) rotateX(-5deg);
+            box-shadow: 
+                0 20px 40px rgba(0,0,0,0.5),
+                0 0 20px currentColor,
+                inset 0 1px 0 rgba(255,255,255,0.3);
         }
-        .card .value-center { font-size: 48px; font-weight: 900; line-height: 1; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
-        .card .corner-value { position: absolute; font-size: 16px; font-weight: 700; line-height: 1; }
+
+        .card .value-center { 
+            font-size: 48px; 
+            font-weight: 900; 
+            line-height: 1; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            flex-grow: 1;
+            font-family: 'Bebas Neue', cursive;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .card .corner-value { 
+            position: absolute; 
+            font-size: 16px; 
+            font-weight: 700; 
+            line-height: 1;
+            font-family: 'Bebas Neue', cursive;
+        }
+
         .card .top-left { top: 8px; left: 8px; }
         .card .bottom-right { bottom: 8px; right: 8px; transform: rotate(180deg); }
 
         .card-back {
-            background: #2D3748; border: 3px solid #4A5568; color: white;
-            display: flex; justify-content: center; align-items: center;
-        }
-        .card-back-text {
-            font-family: 'Arial Black', Gadget, sans-serif; font-size: 36px; font-weight: bold; color: #FFD700;
-            text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 2px 2px 3px rgba(0,0,0,0.5);
-            transform: rotate(-10deg);
+            background: linear-gradient(135deg, #1a1f3a 0%, #0a0e27 100%);
+            border: 2px solid #2979ff;
+            color: white;
+            display: flex; 
+            justify-content: center; 
+            align-items: center;
+            overflow: hidden;
         }
 
-        .card-red { background-color: #FF3B30; color: white; }
-        .card-yellow { background-color: #FFCC00; color: #333; }
-        .card-green { background-color: #4CD964; color: white; }
-        .card-blue { background-color: #007AFF; color: white; }
-        .card-black { background-color: #1C1C1E; color: white; }
+        .card-back::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(41, 121, 255, 0.1) 10px,
+                rgba(41, 121, 255, 0.1) 20px
+            );
+            animation: cardBackPattern 20s linear infinite;
+        }
+
+        @keyframes cardBackPattern {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(20px, 20px); }
+        }
+
+        .card-back-text {
+            font-family: 'Orbitron', monospace;
+            font-size: 32px; 
+            font-weight: 900;
+            background: linear-gradient(45deg, #2979ff, #00e676, #ffc107, #ff1744);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(41, 121, 255, 0.5);
+            z-index: 1;
+        }
+
+        .card-red { 
+            background: linear-gradient(135deg, #ff1744 0%, #d50000 100%); 
+            color: white; 
+        }
+        .card-yellow { 
+            background: linear-gradient(135deg, #ffc107 0%, #ff6f00 100%); 
+            color: #1a1f3a; 
+        }
+        .card-green { 
+            background: linear-gradient(135deg, #00e676 0%, #00c853 100%); 
+            color: white; 
+        }
+        .card-blue { 
+            background: linear-gradient(135deg, #2979ff 0%, #0d47a1 100%); 
+            color: white; 
+        }
+        .card-black { 
+            background: linear-gradient(135deg, #424242 0%, #000000 100%); 
+            color: white; 
+        }
 
         .wild-center-icon {
-            width: 70%; height: 70%; border-radius: 50%;
-            background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
-            display:flex; align-items:center; justify-content:center;
+            width: 70%; 
+            height: 70%; 
+            border-radius: 50%;
+            background: conic-gradient(
+                from 0deg,
+                #ff1744 0deg,
+                #ffc107 90deg,
+                #00e676 180deg,
+                #2979ff 270deg,
+                #ff1744 360deg
+            );
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            animation: wildRotate 3s linear infinite;
+            box-shadow: 
+                0 0 20px rgba(255,255,255,0.5),
+                inset 0 0 20px rgba(0,0,0,0.3);
         }
-        .wild-center-icon .value-center { font-size: 28px; color: white; text-shadow: 1px 1px 2px black;}
 
-        #game-board { background-color: #F7F7F7; border-radius: 20px; }
+        @keyframes wildRotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .wild-center-icon .value-center { 
+            font-size: 28px; 
+            color: white; 
+            text-shadow: 2px 2px 4px black;
+            animation: wildRotate 3s linear infinite reverse;
+        }
+
+        #game-board { 
+            background: transparent;
+        }
 
         .player-area {
-            padding: 12px;
-            border-radius: 12px;
-            background-color: #FFFFFF;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            border: 1px solid #DDD;
-            transition: border-color 0.3s, background-color 0.3s, box-shadow 0.3s;
+            padding: 16px;
+            border-radius: 16px;
+            background: rgba(26, 31, 58, 0.6);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             min-width: 180px;
-            height: 180px;
+            min-height: 180px;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
+
         .player-area.active-turn { 
-            border-color: #007AFF; 
-            background-color: #EBF4FF; 
-            box-shadow: 0 0 12px #007AFF; 
+            border: 2px solid var(--accent-blue);
+            background: rgba(41, 121, 255, 0.1);
+            box-shadow: 
+                0 0 30px rgba(41, 121, 255, 0.5),
+                inset 0 0 20px rgba(41, 121, 255, 0.2);
+            animation: turnPulse 2s ease-in-out infinite;
         }
+
+        @keyframes turnPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
         .player-area.current-player {
-            border: 2px solid #4CD964;
-            background-color: #E8F8EA;
+            border: 2px solid var(--accent-green);
+            background: rgba(0, 230, 118, 0.1);
         }
 
         .player-hand {
@@ -90,7 +288,8 @@
             width: 100%;
             flex-grow: 1;
             min-height: 0;
-            overflow: hidden;
+            overflow: visible;
+            gap: 2px;
         }
         
         .other-player-hand {
@@ -105,265 +304,597 @@
             margin: 3px; 
             padding: 4px; 
         }
+
         .other-player-hand .card .value-center { font-size: 24px; }
         .other-player-hand .card .corner-value { font-size: 10px; top:4px; left:4px;}
         .other-player-hand .card .bottom-right {bottom:4px; right:4px;}
-        .other-player-hand .card-back .card-back-text { font-size: 20px; }
-        .other-player-hand .card:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .other-player-hand .card-back .card-back-text { font-size: 18px; }
+        .other-player-hand .card:hover { transform: scale(1.05); }
 
         .discard-pile .card, .draw-pile .card { cursor: default; }
-        .discard-pile .card:hover, .draw-pile .card:hover { transform: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .playable { border: 3px solid #FFCC00 !important; box-shadow: 0 0 15px #FFCC00, 0 0 25px #FFBF24 inset !important; }
+        .discard-pile .card:hover, .draw-pile .card:hover { 
+            transform: none; 
+            box-shadow: var(--card-shadow); 
+        }
+
+        .playable { 
+            animation: playableGlow 1.5s ease-in-out infinite;
+            cursor: pointer !important;
+        }
+
+        @keyframes playableGlow {
+            0%, 100% { 
+                box-shadow: 
+                    0 0 20px var(--accent-yellow),
+                    0 0 40px var(--accent-yellow),
+                    inset 0 0 20px rgba(255, 193, 7, 0.3);
+                border-color: var(--accent-yellow);
+            }
+            50% { 
+                box-shadow: 
+                    0 0 30px var(--accent-yellow),
+                    0 0 60px var(--accent-yellow),
+                    inset 0 0 30px rgba(255, 193, 7, 0.4);
+                border-color: #ffeb3b;
+            }
+        }
 
         #color-picker-modal {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background-color: #ffffff; padding: 30px; border-radius: 16px;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.25); z-index: 1000;
+            position: fixed; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%);
+            background: rgba(26, 31, 58, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 40px; 
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000;
         }
+
         .color-button {
-            width: 70px; height: 70px; border-radius: 50%; margin: 10px; cursor: pointer;
-            border: 4px solid #E5E7EB; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            width: 80px; 
+            height: 80px; 
+            border-radius: 50%; 
+            margin: 10px; 
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
         }
-        .color-button:hover { transform: scale(1.1); box-shadow: 0 0 12px currentColor; border-color: currentColor; }
+
+        .color-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            transform: translate(-50%, -50%);
+            transition: all 0.6s;
+        }
+
+        .color-button:hover::before {
+            width: 100%;
+            height: 100%;
+        }
+
+        .color-button:hover { 
+            transform: scale(1.15) rotate(5deg); 
+            box-shadow: 0 0 30px currentColor;
+            border-color: currentColor;
+        }
 
         .current-color-indicator {
-            width: 28px; height: 28px; border-radius: 50%; display: inline-block;
-            margin-left: 12px; vertical-align: middle; border: 2px solid #BDBDBD;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+            width: 32px; 
+            height: 32px; 
+            border-radius: 50%; 
+            display: inline-block;
+            margin-left: 12px; 
+            vertical-align: middle; 
+            border: 2px solid rgba(255,255,255,0.3);
+            box-shadow: 
+                0 2px 10px rgba(0,0,0,0.3),
+                inset 0 2px 4px rgba(255,255,255,0.2);
         }
 
         @keyframes cardDropToDiscardAnimation {
-            0% { transform: translateY(-80px) rotate(-15deg) scale(0.8); opacity: 0.6; }
-            60% { transform: translateY(10px) rotate(3deg) scale(1.03); opacity: 1; }
-            100% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+            0% { 
+                transform: translateY(-100px) rotate(-20deg) scale(0.7); 
+                opacity: 0; 
+            }
+            50% { 
+                transform: translateY(20px) rotate(5deg) scale(1.1); 
+            }
+            100% { 
+                transform: translateY(0) rotate(0deg) scale(1); 
+                opacity: 1; 
+            }
         }
-        .card-animate-to-discard { animation: cardDropToDiscardAnimation 0.4s cubic-bezier(0.25, 0.1, 0.25, 1.2); position: relative; z-index: 10; }
+
+        .card-animate-to-discard { 
+            animation: cardDropToDiscardAnimation 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); 
+            position: relative; 
+            z-index: 10; 
+        }
+
+        #uno-callout, #win-callout {
+            position: fixed; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%) scale(0);
+            padding: 30px 60px; 
+            font-size: 4rem; 
+            font-weight: 900;
+            border-radius: 20px; 
+            z-index: 3000; 
+            text-align: center;
+            font-family: 'Orbitron', monospace;
+            text-transform: uppercase;
+            animation: calloutAppear 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+        }
+
+        @keyframes calloutAppear {
+            to {
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
 
         #uno-callout {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            padding: 15px 30px; background-color: #FFCC00; color: #D20000; font-size: 3rem; font-weight: 900;
-            border-radius: 15px; box-shadow: 0 0 30px rgba(0,0,0,0.6); z-index: 3000; text-align: center;
-            text-shadow: 2px 2px 0px rgba(255,255,255,0.5), -1px -1px 0 #A50000, 1px -1px 0 #A50000, -1px 1px 0 #A50000, 1px 1px 0 #A50000;
-            border: 4px solid #D20000; font-family: 'Paytone One', sans-serif;
+            background: linear-gradient(135deg, var(--accent-yellow) 0%, var(--accent-red) 100%);
+            color: white;
+            box-shadow: 
+                0 0 60px rgba(255, 193, 7, 0.8),
+                inset 0 0 20px rgba(255,255,255,0.3);
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.5);
         }
 
         #win-callout {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            padding: 20px 40px; background-color: #4CD964; color: #FFFFFF; font-size: 3rem; font-weight: 900;
-            border-radius: 15px; box-shadow: 0 0 30px rgba(0,0,0,0.6); z-index: 3000; text-align: center;
-            text-shadow: 2px 2px 0px rgba(0,0,0,0.3);
-            border: 4px solid #2E7D32; font-family: 'Paytone One', sans-serif;
+            background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-blue) 100%);
+            color: white;
+            box-shadow: 
+                0 0 60px rgba(0, 230, 118, 0.8),
+                inset 0 0 20px rgba(255,255,255,0.3);
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.5);
         }
 
         .room-code {
-            font-family: 'Courier New', monospace;
-            font-size: 2rem;
-            font-weight: bold;
-            letter-spacing: 0.2em;
-            color: #007AFF;
-            background-color: #F0F4FF;
-            padding: 8px 16px;
-            border-radius: 8px;
-            border: 2px dashed #007AFF;
+            font-family: 'Orbitron', monospace;
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: 0.3em;
+            color: var(--accent-blue);
+            background: rgba(41, 121, 255, 0.1);
+            padding: 12px 24px;
+            border-radius: 12px;
+            border: 2px solid var(--accent-blue);
+            box-shadow: 
+                0 0 20px rgba(41, 121, 255, 0.3),
+                inset 0 0 20px rgba(41, 121, 255, 0.1);
         }
 
         #stack-penalty-display {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #D32F2F;
-            background-color: #FFEBEE;
-            padding: 4px 12px;
-            border-radius: 16px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent-red);
+            background: rgba(255, 23, 68, 0.1);
+            padding: 8px 20px;
+            border-radius: 20px;
             margin-top: 8px;
             display: none;
-            animation: pulse 1s infinite;
+            border: 1px solid var(--accent-red);
+            animation: stackPulse 1s ease-in-out infinite;
         }
         
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
+        @keyframes stackPulse {
+            0%, 100% { 
+                transform: scale(1); 
+                box-shadow: 0 0 10px rgba(255, 23, 68, 0.5);
+            }
+            50% { 
+                transform: scale(1.05); 
+                box-shadow: 0 0 20px rgba(255, 23, 68, 0.8);
+            }
         }
 
         #my-player-area {
-            height: 350px;
+            min-height: 380px;
             margin-bottom: 20px;
+            background: rgba(26, 31, 58, 0.8);
+            overflow: visible;
+        }
+        
+        #my-hand {
+            overflow: visible;
+            padding: 10px 0;
         }
 
         #game-over-screen {
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(10px);
+            background: rgba(10, 14, 39, 0.9);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, #1565c0 100%);
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+            padding: 12px 32px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 
+                0 4px 20px rgba(41, 121, 255, 0.3),
+                inset 0 1px 0 rgba(255,255,255,0.2);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 8px 30px rgba(41, 121, 255, 0.5),
+                inset 0 1px 0 rgba(255,255,255,0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+            padding: 12px 32px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--accent-red) 0%, #c62828 100%);
+            color: white;
+            font-weight: 600;
+            padding: 10px 24px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(255, 23, 68, 0.5);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--accent-green) 0%, #00a152 100%);
+            color: white;
+            font-weight: 600;
+            padding: 12px 32px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 230, 118, 0.5);
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 14px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 20px rgba(41, 121, 255, 0.3);
+        }
+
+        .input-field::placeholder {
+            color: var(--text-secondary);
+        }
+
+        #table-area {
+            background: radial-gradient(ellipse at center, rgba(0, 230, 118, 0.1) 0%, transparent 70%);
+            border: 2px solid rgba(0, 230, 118, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #table-area::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, 
+                var(--accent-green), 
+                transparent, 
+                var(--accent-blue), 
+                transparent, 
+                var(--accent-green)
+            );
+            opacity: 0.3;
+            animation: tableBorder 8s linear infinite;
+            border-radius: 20px;
+        }
+
+        @keyframes tableBorder {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #center-info-area {
+            background: rgba(26, 31, 58, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1;
+        }
+
+        #turn-timer-display {
+            font-family: 'Orbitron', monospace;
+            font-weight: 600;
+            color: var(--accent-yellow);
+        }
+
+        .player-list-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.3s;
+        }
+
+        .player-list-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
         }
 
         #final-rankings > div {
-            transition: background-color 0.3s ease;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
         }
 
-        #vote-list > div {
-            animation: fadeIn 0.3s ease;
+        #final-rankings > div:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(5px);
         }
 
-        @keyframes fadeIn {
-            from {
+        .modal-content {
+            background: rgba(26, 31, 58, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        h1, h2, h3 {
+            font-family: 'Orbitron', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .turn-notification {
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
+            color: white;
+            padding: 20px 60px;
+            border-radius: 50px;
+            font-size: 2rem;
+            font-weight: 900;
+            font-family: 'Orbitron', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            box-shadow: 
+                0 10px 40px rgba(41, 121, 255, 0.6),
+                inset 0 2px 4px rgba(255,255,255,0.3);
+            animation: turnNotify 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            z-index: 2500;
+        }
+        
+        @keyframes turnNotify {
+            0% {
+                transform: translateX(-50%) translateY(-100px) scale(0);
                 opacity: 0;
-                transform: translateY(-10px);
             }
-            to {
+            50% {
+                transform: translateX(-50%) translateY(20px) scale(1.1);
+            }
+            100% {
+                transform: translateX(-50%) translateY(0) scale(1);
                 opacity: 1;
-                transform: translateY(0);
             }
+        }
+        
+        .logo-text {
+            font-size: 4rem;
+            font-weight: 900;
+            background: linear-gradient(45deg, 
+                var(--accent-red), 
+                var(--accent-yellow), 
+                var(--accent-green), 
+                var(--accent-blue)
+            );
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 40px rgba(255,255,255,0.3);
+            animation: logoGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes logoGlow {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.2); }
         }
     </style>
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen p-2">
+    <div class="game-container w-full h-full flex items-center justify-center">
 
-    <!-- 房間設置畫面 -->
-    <div id="room-setup" class="fixed inset-0 bg-gray-900 bg-opacity-90 flex items-center justify-center z-50">
-        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-md w-full">
-            <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">UNO 多人遊戲</h1>
-            
-            <div class="mb-6">
-                <input type="text" id="player-name" placeholder="輸入您的名字" 
-                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-lg">
+        <div id="room-setup" class="fixed inset-0 flex items-center justify-center z-50">
+            <div class="modal-content p-10 max-w-md w-full">
+                <h1 class="logo-text text-center mb-10">UNO</h1>
+                
+                <div class="mb-8">
+                    <input type="text" id="player-name" placeholder="輸入您的名字" 
+                        class="input-field">
+                </div>
+
+                <div class="space-y-4">
+                    <button id="create-room-btn" class="btn-primary w-full">
+                        創建房間
+                    </button>
+                    
+                    <div class="flex space-x-3">
+                        <input type="text" id="room-code-input" placeholder="輸入房間代碼" maxlength="6"
+                            class="input-field flex-1 text-center uppercase tracking-widest">
+                        <button id="join-room-btn" class="btn-success">
+                            加入房間
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="error-message" class="mt-6 text-red-400 text-center hidden font-semibold"></div>
             </div>
+        </div>
 
-            <div class="space-y-4">
-                <button id="create-room-btn" 
-                    class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200">
-                    創建房間
+        <div id="waiting-room" class="fixed inset-0 flex items-center justify-center z-50 hidden">
+            <div class="modal-content p-10 max-w-md w-full">
+                <h2 class="neon-text text-3xl text-center mb-8">等待玩家加入</h2>
+                
+                <div class="text-center mb-8">
+                    <p class="text-secondary mb-3">房間代碼</p>
+                    <div id="room-code-display" class="room-code"></div>
+                    <p class="text-sm text-secondary mt-3">支援 1-4 位玩家，不足 4 人會有電腦補位</p>
+                </div>
+                
+                <div id="players-list" class="space-y-3 mb-8">
+                </div>
+                
+                <button id="ready-btn" class="btn-success w-full mb-3">
+                    準備開始
                 </button>
                 
-                <div class="flex space-x-2">
-                    <input type="text" id="room-code-input" placeholder="輸入房間代碼" maxlength="6"
-                        class="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none text-lg uppercase">
-                    <button id="join-room-btn" 
-                        class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200">
-                        加入房間
+                <button id="leave-room-btn" class="btn-danger w-full">
+                    離開房間
+                </button>
+            </div>
+        </div>
+
+        <div id="game-board" class="w-full max-w-7xl mx-auto p-4 hidden flex flex-col justify-between h-[95vh]">
+            <div id="other-players-container" class="grid gap-4">
+            </div>
+
+            <div id="table-area" class="flex justify-around items-center my-6 p-8 rounded-3xl shadow-2xl relative">
+                
+                <div id="draw-pile-container" class="text-center">
+                    <h3 class="text-secondary font-semibold text-lg mb-2">抽牌堆</h3>
+                    <div id="draw-pile" class="draw-pile"></div>
+                    <p class="text-secondary text-sm mt-2">(<span id="draw-pile-count">0</span> 張)</p>
+                </div>
+
+                <div id="discard-pile-container" class="text-center">
+                    <h3 class="text-secondary font-semibold text-lg mb-2">棄牌堆</h3>
+                    <div id="discard-pile" class="discard-pile"></div>
+                </div>
+
+                <div id="center-info-area" class="flex flex-col items-center justify-center text-center mx-6 px-8 py-6 rounded-2xl shadow-xl">
+                    <div id="active-player-display" class="text-2xl font-bold mb-3 neon-text">等待開始</div>
+                    <div id="turn-timer-display" class="text-lg mb-3">思考時間: 10s</div>
+                    <div id="stack-penalty-display">累積懲罰: +0</div>
+                    <div id="current-color-display" class="mt-3 flex items-center">
+                        <span class="font-semibold text-secondary">當前顏色:</span>
+                        <span id="current-color-indicator" class="current-color-indicator"></span>
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="my-player-area" class="player-area current-player mx-auto p-6 w-full">
+                <h2 class="text-2xl font-bold mb-4 neon-text">
+                    <span id="my-name">我</span> (<span id="my-card-count">0</span>)
+                </h2>
+                <div id="my-hand" class="player-hand"></div>
+            </div>
+        </div>
+
+        <div id="color-picker-modal" class="hidden">
+            <h3 class="neon-text text-2xl text-center mb-8">選擇顏色</h3>
+            <div class="flex justify-center">
+                <button class="color-button" data-color="red" style="background: linear-gradient(135deg, #ff1744, #d50000);"></button>
+                <button class="color-button" data-color="yellow" style="background: linear-gradient(135deg, #ffc107, #ff6f00);"></button>
+                <button class="color-button" data-color="green" style="background: linear-gradient(135deg, #00e676, #00c853);"></button>
+                <button class="color-button" data-color="blue" style="background: linear-gradient(135deg, #2979ff, #0d47a1);"></button>
+            </div>
+        </div>
+
+        <div id="uno-callout" class="hidden">UNO!</div>
+
+        <div id="win-callout" class="hidden">獲勝！</div>
+
+        <div id="game-over-screen" class="fixed inset-0 flex items-center justify-center z-50 hidden">
+            <div class="modal-content p-10 max-w-lg w-full">
+                <h2 id="game-over-title" class="neon-text text-4xl text-center mb-8">遊戲結束</h2>
+                
+                <div id="game-over-message" class="text-2xl text-center mb-10 font-semibold"></div>
+                
+                <div id="final-rankings" class="mb-10 space-y-3"></div>
+                
+                <div id="rematch-votes" class="mb-8 hidden">
+                    <h3 class="text-xl font-semibold mb-4 text-center">同意再來一局</h3>
+                    <div id="vote-list" class="space-y-2"></div>
+                    <div class="text-center mt-4 text-secondary">
+                        <span id="vote-count">0</span> / <span id="total-players">0</span> 位玩家同意
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <button id="rematch-btn" class="btn-success w-full">
+                        再來一局
+                    </button>
+                    
+                    <button id="leave-game-btn" class="btn-secondary w-full">
+                        離開遊戲
                     </button>
                 </div>
             </div>
-            
-            <div id="error-message" class="mt-4 text-red-500 text-center hidden"></div>
-        </div>
-    </div>
-
-    <!-- 等待房間畫面 -->
-    <div id="waiting-room" class="fixed inset-0 bg-gray-900 bg-opacity-90 flex items-center justify-center z-50 hidden">
-        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-md w-full">
-            <h2 class="text-2xl font-bold text-center mb-6 text-gray-800">等待玩家加入</h2>
-            
-            <div class="text-center mb-6">
-                <p class="text-gray-600 mb-2">房間代碼</p>
-                <div id="room-code-display" class="room-code"></div>
-                <p class="text-sm text-gray-500 mt-2">支援 1-4 位玩家，不足 4 人會有電腦補位</p>
-            </div>
-            
-            <div id="players-list" class="space-y-3 mb-6">
-                <!-- 玩家列表會動態更新 -->
-            </div>
-            
-            <button id="ready-btn" 
-                class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200">
-                準備開始
-            </button>
-            
-            <button id="leave-room-btn" 
-                class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200 mt-3">
-                離開房間
-            </button>
-        </div>
-    </div>
-
-    <!-- 遊戲畫面 -->
-    <div id="game-board" class="w-full mx-auto p-4 rounded-xl shadow-2xl hidden">
-        <h1 class="text-5xl font-bold text-center mb-8 text-blue-600">UNO</h1>
-
-        <!-- 其他玩家區域 -->
-        <div id="other-players-container" class="grid gap-3 mb-6">
-            <!-- 動態生成其他玩家區域 -->
         </div>
 
-        <!-- 遊戲桌面 -->
-        <div id="table-area" class="flex justify-around items-center mb-6 p-5 bg-green-500 rounded-lg shadow-lg">
-            <div id="draw-pile-container" class="text-center">
-                <h3 class="text-white font-semibold text-base">抽牌堆</h3>
-                <div id="draw-pile" class="draw-pile mt-1.5"></div>
-                <p class="text-white text-sm mt-1.5">(<span id="draw-pile-count">0</span> 張)</p>
-            </div>
-
-            <div id="center-info-area" class="flex flex-col items-center justify-center text-center mx-4 px-6 py-4 bg-white rounded-lg">
-                <div id="active-player-display" class="text-xl font-bold text-gray-800 mb-2">等待開始</div>
-                <div id="turn-timer-display" class="text-lg text-gray-600 mb-2">思考時間: 10s</div>
-                <div id="stack-penalty-display">累積懲罰: +0</div>
-                <div id="current-color-display" class="mt-2">
-                    <span>當前顏色:</span>
-                    <span id="current-color-indicator" class="current-color-indicator"></span>
-                </div>
-            </div>
-
-            <div id="discard-pile-container" class="text-center">
-                <h3 class="text-white font-semibold text-base">棄牌堆</h3>
-                <div id="discard-pile" class="discard-pile mt-1.5"></div>
-            </div>
-        </div>
-
-        <!-- 自己的手牌區域 -->
-        <div id="my-player-area" class="player-area mx-auto p-4">
-            <h2 class="text-xl font-semibold mb-3 text-gray-800">
-                <span id="my-name">我</span> (<span id="my-card-count">0</span>)
-            </h2>
-            <div id="my-hand" class="player-hand"></div>
-        </div>
-    </div>
-
-    <!-- 顏色選擇器 -->
-    <div id="color-picker-modal" class="hidden">
-        <h3 class="text-2xl font-semibold mb-5 text-center text-gray-800">選擇一個顏色</h3>
-        <div class="flex justify-center">
-            <button class="color-button bg-red-500" data-color="red"></button>
-            <button class="color-button bg-yellow-400" data-color="yellow"></button>
-            <button class="color-button bg-green-500" data-color="green"></button>
-            <button class="color-button bg-blue-500" data-color="blue"></button>
-        </div>
-    </div>
-
-    <!-- UNO 喊叫 -->
-    <div id="uno-callout" class="hidden">UNO!</div>
-
-    <!-- 勝利提示 -->
-    <div id="win-callout" class="hidden">獲勝！</div>
-
-    <!-- 遊戲結束畫面 -->
-    <div id="game-over-screen" class="fixed inset-0 bg-gray-900 bg-opacity-90 flex items-center justify-center z-50 hidden">
-        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-lg w-full">
-            <h2 id="game-over-title" class="text-3xl font-bold text-center mb-6 text-gray-800">遊戲結束</h2>
-            
-            <div id="game-over-message" class="text-xl text-center mb-8 text-gray-600"></div>
-            
-            <!-- 最終排名 -->
-            <div id="final-rankings" class="mb-8 space-y-2"></div>
-            
-            <!-- 再來一局投票狀態 -->
-            <div id="rematch-votes" class="mb-6 hidden">
-                <h3 class="text-lg font-semibold mb-3 text-center">同意再來一局</h3>
-                <div id="vote-list" class="space-y-2"></div>
-                <div class="text-center mt-3 text-gray-500">
-                    <span id="vote-count">0</span> / <span id="total-players">0</span> 位玩家同意
-                </div>
-            </div>
-            
-            <!-- 按鈕 -->
-            <div class="space-y-3">
-                <button id="rematch-btn" 
-                    class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200">
-                    再來一局
-                </button>
-                
-                <button id="leave-game-btn" 
-                    class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200">
-                    離開遊戲
-                </button>
-            </div>
-        </div>
     </div>
 
     <script>
@@ -430,7 +961,6 @@
                     
                     this.renderGameState();
                     
-                    // 顯示被跳過的玩家
                     if (result && result.skippedPlayerId) {
                         const skippedPlayer = this.gameState.players.find(p => p.id === result.skippedPlayerId);
                         if (skippedPlayer) {
@@ -438,10 +968,8 @@
                         }
                     }
                     
-                    // 處理超時強制結束回合
                     if (result && result.timeout && result.forceEndTurn) {
                         this.canPlayDrawnCard = false;
-                        // 顯示超時訊息 - 檢查是否是自己超時
                         if (lastMove.playerId === this.myPlayerId || previousPlayerId === this.myPlayerId) {
                             this.showTimeoutMessage();
                         }
@@ -449,7 +977,6 @@
                         return;
                     }
                     
-                    // 抽牌後立即超時的情況
                     if (result && result.timeout && lastMove && lastMove.type === 'drawCard') {
                         this.canPlayDrawnCard = false;
                         if (lastMove.playerId === this.myPlayerId) {
@@ -490,7 +1017,6 @@
                         this.showWinCallout(reason, true);
                     }
                     
-                    // 顯示遊戲結束畫面
                     setTimeout(() => {
                         this.showGameOverScreen(winner, reason);
                     }, 2000);
@@ -500,37 +1026,25 @@
                     this.updateRematchVotes(votes, totalPlayers);
                     
                     if (allVoted) {
-                        // 顯示即將開始新遊戲的提示
                         document.getElementById('game-over-message').innerHTML = 
-                            '<span class="text-green-600 font-bold">所有玩家同意！準備開始新遊戲...</span>';
+                            '<span class="text-green-400 font-bold">所有玩家同意！準備開始新遊戲...</span>';
                     }
                 });
 
                 this.socket.on('returnToWaitingRoom', ({ players }) => {
-                    // 隱藏遊戲結束畫面
                     document.getElementById('game-over-screen').classList.add('hidden');
-                    
-                    // 隱藏遊戲畫面
                     document.getElementById('game-board').classList.add('hidden');
-                    
-                    // 顯示等待房間
                     document.getElementById('waiting-room').classList.remove('hidden');
-                    
-                    // 更新玩家列表
                     this.updatePlayersList(players);
-                    
-                    // 重置遊戲狀態
                     this.gameState = null;
                     this.canPlayDrawnCard = false;
                 });
 
                 this.socket.on('moveError', (error) => {
                     console.error('移動錯誤:', error);
-                    // 可以在這裡顯示錯誤提示給玩家
                 });
 
                 this.socket.on('playerDisconnected', ({ playerId }) => {
-                    // 玩家斷線處理
                 });
             }
 
@@ -601,12 +1115,19 @@
                 document.getElementById('game-board').classList.remove('hidden');
             }
 
-            startTurnTimer(initialTime = 10) {
+            startTurnTimer(initialTime = 15) {
                 this.clearTurnTimer();
                 
                 if (!this.gameState) return;
                 
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
+                const isMyTurn = currentPlayer.id === this.myPlayerId;
+                
+                // 如果輪到玩家，顯示提示
+                if (isMyTurn && !currentPlayer.isComputer) {
+                    this.showTurnNotification();
+                }
+                
                 if (currentPlayer.isComputer) {
                     document.getElementById('turn-timer-display').textContent = '電腦思考中...';
                     return;
@@ -620,10 +1141,12 @@
                     timeRemaining--;
                     if (timeRemaining > 0) {
                         document.getElementById('turn-timer-display').textContent = `思考時間: ${timeRemaining}s`;
+                        if (timeRemaining <= 3) {
+                            document.getElementById('turn-timer-display').style.color = 'var(--accent-red)';
+                        }
                     } else if (timeRemaining === 0) {
-                        // 顯示超時
                         document.getElementById('turn-timer-display').textContent = '超時！';
-                        document.getElementById('turn-timer-display').style.color = '#D32F2F';
+                        document.getElementById('turn-timer-display').style.color = 'var(--accent-red)';
                     } else {
                         this.clearTurnTimer();
                     }
@@ -640,21 +1163,24 @@
             updatePlayersList(players) {
                 const listEl = document.getElementById('players-list');
                 listEl.innerHTML = players.map(p => `
-                    <div class="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
-                        <span class="font-semibold">${p.name}</span>
-                        <span class="text-sm ${p.ready ? 'text-green-600' : 'text-gray-500'}">
-                            ${p.ready ? '已準備' : '未準備'}
+                    <div class="player-list-item flex items-center justify-between">
+                        <span class="font-semibold text-lg">${p.name}</span>
+                        <span class="text-sm ${p.ready ? 'text-green-400' : 'text-secondary'}">
+                            ${p.ready ? '✓ 已準備' : '未準備'}
                         </span>
                     </div>
                 `).join('');
                 
                 const readyBtn = document.getElementById('ready-btn');
-                if (players.length >= 1 && players.length <= 4) {
-                    readyBtn.disabled = false;
-                    readyBtn.textContent = '準備開始';
-                } else {
+                const myPlayer = players.find(p => p.socketId === this.socket.id);
+                
+                readyBtn.disabled = myPlayer ? myPlayer.ready : false;
+                readyBtn.textContent = (myPlayer && myPlayer.ready) ? '等待其他玩家...' : '準備開始';
+                
+                const canStart = players.length >= 1 && players.length <= 4 && players.every(p => p.ready);
+                if (canStart) {
+                    readyBtn.textContent = '遊戲即將開始...';
                     readyBtn.disabled = true;
-                    readyBtn.textContent = '等待玩家加入...';
                 }
             }
 
@@ -676,12 +1202,12 @@
                 const otherPlayers = this.gameState.players.filter(p => p.id !== this.myPlayerId);
                 
                 const gridClass = {
-                    1: 'grid-cols-1',
+                    1: 'grid-cols-1 justify-items-center',
                     2: 'grid-cols-2', 
                     3: 'grid-cols-3'
                 }[otherPlayers.length] || 'grid-cols-3';
                 
-                container.className = `grid ${gridClass} gap-3 mb-6`;
+                container.className = `grid ${gridClass} gap-4`;
                 
                 otherPlayers.forEach(player => {
                     const playerDiv = document.createElement('div');
@@ -693,11 +1219,11 @@
                     const cardsToDisplay = Math.min(cardCount, maxCardsToShow);
                     
                     playerDiv.innerHTML = `
-                        <h3 class="text-sm font-semibold mb-2 text-gray-700">
+                        <h3 class="text-base font-bold mb-2 neon-text text-sm">
                             ${player.name} (${cardCount})
                         </h3>
                         <div class="player-hand other-player-hand">
-                            ${Array(cardsToDisplay).fill().map(() => this.renderCard({}, false, true)).map(el => el.outerHTML).join('')}
+                            ${Array(cardsToDisplay).fill().map(() => this.renderCard({}, false, true).outerHTML).join('')}
                         </div>
                     `;
                     
@@ -719,10 +1245,12 @@
                 const isMyTurn = this.gameState.currentPlayerIndex === this.gameState.players.findIndex(p => p.id === this.myPlayerId);
                 
                 myPlayer.hand.forEach((card, index) => {
-                    const isPlayable = isMyTurn && this.isCardPlayable(card, topCard, myPlayer.hand.length);
+                    const isPlayableOnMyTurn = isMyTurn && this.isCardPlayable(card, topCard, myPlayer.hand.length);
+                    const canPlayTheDrawnCard = this.canPlayDrawnCard && index === myPlayer.hand.length - 1;
+
                     const cardEl = this.renderCard(card, true, false);
                     
-                    if (isPlayable || (this.canPlayDrawnCard && index === myPlayer.hand.length - 1)) {
+                    if (isPlayableOnMyTurn || canPlayTheDrawnCard) {
                         cardEl.classList.add('playable');
                         cardEl.addEventListener('click', () => {
                             this.clearTurnTimer();
@@ -731,6 +1259,7 @@
                         });
                     } else {
                         cardEl.style.cursor = 'default';
+                        cardEl.style.transform = '';
                     }
                     
                     handEl.appendChild(cardEl);
@@ -756,7 +1285,6 @@
                 const cardBack = this.renderCard({}, false, false);
                 const isMyTurn = this.gameState.currentPlayerIndex === this.gameState.players.findIndex(p => p.id === this.myPlayerId);
                 
-                // 只有在是玩家回合且還沒抽過牌時才能點擊抽牌堆
                 if (isMyTurn && !this.gameState.playerHasDrawnThisTurn) {
                     cardBack.style.cursor = 'pointer';
                     cardBack.addEventListener('click', () => {
@@ -773,21 +1301,22 @@
 
             updateGameInfo() {
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
-                document.getElementById('active-player-display').textContent = `輪到 ${currentPlayer.name}`;
+                document.getElementById('active-player-display').textContent = `${currentPlayer.name} 的回合`;
                 
+                const stackEl = document.getElementById('stack-penalty-display');
                 if (this.gameState.isStackActive) {
-                    const stackEl = document.getElementById('stack-penalty-display');
                     stackEl.textContent = `累積懲罰: +${this.gameState.stackPenalty}`;
                     stackEl.style.display = 'inline-block';
                 } else {
-                    document.getElementById('stack-penalty-display').style.display = 'none';
+                    stackEl.style.display = 'none';
                 }
                 
                 const colorEl = document.getElementById('current-color-indicator');
                 if (this.gameState.currentColorInPlay) {
                     colorEl.style.backgroundColor = this.getColorCode(this.gameState.currentColorInPlay);
                 } else {
-                    colorEl.style.backgroundColor = '#BDBDBD';
+                    const topCard = this.gameState.discardPile[this.gameState.discardPile.length - 1];
+                    colorEl.style.backgroundColor = topCard ? this.getColorCode(topCard.color) : '#424242';
                 }
             }
 
@@ -796,12 +1325,17 @@
                     el.classList.remove('active-turn');
                 });
                 
+                const myPlayerArea = document.getElementById('my-player-area');
+                myPlayerArea.classList.remove('active-turn');
+                myPlayerArea.classList.add('current-player');
+
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
-                if (currentPlayer.id === this.myPlayerId) {
-                    document.getElementById('my-player-area').classList.add('active-turn');
-                } else {
-                    const playerEl = document.getElementById(`player-${currentPlayer.id}`);
-                    if (playerEl) playerEl.classList.add('active-turn');
+                const targetEl = (currentPlayer.id === this.myPlayerId) 
+                    ? myPlayerArea 
+                    : document.getElementById(`player-${currentPlayer.id}`);
+                
+                if (targetEl) {
+                     targetEl.classList.add('active-turn');
                 }
             }
 
@@ -826,15 +1360,11 @@
                         break;
                     case 'skip':
                         centerContentHTML = ICONS.skip;
-                        if (card.color === 'yellow') {
-                            centerContentHTML = centerContentHTML.replace('class="action-icon"', 'class="action-icon text-black"');
-                        }
+                        if (card.color === 'yellow') centerContentHTML = centerContentHTML.replace('stroke="currentColor"', 'stroke="#1a1f3a"');
                         break;
                     case 'reverse':
                         centerContentHTML = ICONS.reverse;
-                        if (card.color === 'yellow') {
-                            centerContentHTML = centerContentHTML.replace('class="action-icon"', 'class="action-icon text-black"');
-                        }
+                        if (card.color === 'yellow') centerContentHTML = centerContentHTML.replace('stroke="currentColor"', 'stroke="#1a1f3a"');
                         break;
                     case 'drawTwo':
                         centerContentHTML = ICONS.drawTwo;
@@ -860,8 +1390,14 @@
 
             isCardPlayable(card, topCard, handSize) {
                 if (!topCard) return true;
-                
-                if (handSize === 1 && card.type !== 'number') {
+
+                if (this.gameState.playerHasDrawnThisTurn) {
+                     const myPlayer = this.gameState.players.find(p => p.id === this.myPlayerId);
+                     const drawnCard = myPlayer.hand[myPlayer.hand.length - 1];
+                     if (card.color !== drawnCard.color || card.value !== drawnCard.value) return false;
+                }
+
+                if (handSize === 1 && card.type !== 'number' && card.type !== 'wild') {
                     return false;
                 }
                 
@@ -873,10 +1409,8 @@
                 }
                 
                 if (card.color === 'black') return true;
-                if (this.gameState.currentColorInPlay) {
-                    return card.color === this.gameState.currentColorInPlay || card.value === topCard.value;
-                }
-                return card.color === topCard.color || card.value === topCard.value;
+                const effectiveColor = this.gameState.currentColorInPlay || topCard.color;
+                return card.color === effectiveColor || card.value === topCard.value;
             }
 
             showColorPicker() {
@@ -889,22 +1423,13 @@
 
             getColorCode(color) {
                 const colors = {
-                    'red': '#FF3B30',
-                    'yellow': '#FFCC00',
-                    'green': '#4CD964',
-                    'blue': '#007AFF',
-                    'black': '#1C1C1E'
+                    'red': '#ff1744', 
+                    'yellow': '#ffc107', 
+                    'green': '#00e676',
+                    'blue': '#2979ff', 
+                    'black': '#424242'
                 };
-                return colors[color] || '#BDBDBD';
-            }
-
-            logMessage(message, type = 'action') {
-                const msgArea = document.getElementById('message-area');
-                const msgDiv = document.createElement('div');
-                msgDiv.className = `msg msg-${type}`;
-                msgDiv.textContent = message;
-                msgArea.appendChild(msgDiv);
-                msgArea.scrollTop = msgArea.scrollHeight;
+                return colors[color] || '#424242';
             }
 
             showUnoCallout(playerName) {
@@ -917,93 +1442,70 @@
             showSkipMessage(playerName) {
                 const msgDiv = document.createElement('div');
                 msgDiv.style.cssText = `
-                    position: fixed;
-                    top: 40%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background-color: #FF9800;
-                    color: white;
-                    padding: 20px 40px;
-                    border-radius: 10px;
-                    font-size: 1.8rem;
-                    font-weight: bold;
-                    z-index: 2000;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                    animation: bounceIn 0.5s ease-out;
+                    position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%);
+                    background: linear-gradient(135deg, #ff6f00 0%, #ff9800 100%); 
+                    color: white; padding: 30px 50px;
+                    border-radius: 16px; font-size: 2rem; font-weight: 900;
+                    z-index: 2000; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+                    animation: skipBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                    font-family: 'Orbitron', monospace;
+                    text-transform: uppercase;
+                    letter-spacing: 0.1em;
                 `;
-                msgDiv.innerHTML = `🚫 ${playerName} 被跳過！`;
+                msgDiv.innerHTML = `⛔ ${playerName} 被跳過！`;
                 document.body.appendChild(msgDiv);
                 
-                // 添加動畫樣式
                 if (!document.getElementById('skip-animation-style')) {
                     const style = document.createElement('style');
                     style.id = 'skip-animation-style';
-                    style.textContent = `
-                        @keyframes bounceIn {
-                            0% {
-                                transform: translate(-50%, -50%) scale(0);
-                                opacity: 0;
-                            }
-                            50% {
-                                transform: translate(-50%, -50%) scale(1.1);
-                            }
-                            100% {
-                                transform: translate(-50%, -50%) scale(1);
-                                opacity: 1;
-                            }
-                        }
-                    `;
+                    style.textContent = `@keyframes skipBounce { 
+                        0% { transform: translate(-50%, -50%) scale(0) rotate(-180deg); opacity: 0; } 
+                        50% { transform: translate(-50%, -50%) scale(1.2) rotate(10deg); } 
+                        100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; } 
+                    }`;
                     document.head.appendChild(style);
                 }
                 
                 setTimeout(() => {
-                    msgDiv.style.animation = 'bounceIn 0.3s ease-out reverse';
-                    setTimeout(() => msgDiv.remove(), 300);
+                    msgDiv.style.animation = 'skipBounce 0.4s ease-in reverse';
+                    setTimeout(() => msgDiv.remove(), 400);
                 }, 1500);
             }
 
             showTimeoutMessage() {
                 const msgDiv = document.createElement('div');
                 msgDiv.style.cssText = `
-                    position: fixed;
-                    top: 40%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background-color: #f44336;
-                    color: white;
-                    padding: 20px 40px;
-                    border-radius: 10px;
-                    font-size: 1.8rem;
-                    font-weight: bold;
-                    z-index: 2000;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                    animation: slideDown 0.3s ease-out;
+                    position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%);
+                    background: linear-gradient(135deg, #c62828 0%, #f44336 100%); 
+                    color: white; padding: 30px 50px;
+                    border-radius: 16px; font-size: 2rem; font-weight: 900;
+                    z-index: 2000; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+                    animation: timeoutShake 0.5s ease-out;
+                    font-family: 'Orbitron', monospace;
+                    text-transform: uppercase;
+                    letter-spacing: 0.1em;
                 `;
                 msgDiv.textContent = '⏰ 超時！回合結束';
                 document.body.appendChild(msgDiv);
                 
-                // 添加動畫樣式
                 if (!document.getElementById('timeout-animation-style')) {
                     const style = document.createElement('style');
                     style.id = 'timeout-animation-style';
-                    style.textContent = `
-                        @keyframes slideDown {
-                            from {
-                                transform: translate(-50%, -100%);
-                                opacity: 0;
-                            }
-                            to {
-                                transform: translate(-50%, -50%);
-                                opacity: 1;
-                            }
-                        }
-                    `;
+                    style.textContent = `@keyframes timeoutShake { 
+                        0%, 100% { transform: translate(-50%, -50%); } 
+                        10% { transform: translate(-48%, -50%); }
+                        20% { transform: translate(-52%, -50%); }
+                        30% { transform: translate(-48%, -50%); }
+                        40% { transform: translate(-52%, -50%); }
+                        50% { transform: translate(-50%, -50%); }
+                    }`;
                     document.head.appendChild(style);
                 }
                 
                 setTimeout(() => {
-                    msgDiv.style.animation = 'slideDown 0.3s ease-out reverse';
-                    setTimeout(() => msgDiv.remove(), 300);
+                    msgDiv.style.opacity = '0';
+                    msgDiv.style.transition = 'opacity 0.4s';
+                    setTimeout(() => msgDiv.remove(), 400);
                 }, 1700);
             }
 
@@ -1013,40 +1515,42 @@
                 const rankingsEl = document.getElementById('final-rankings');
                 
                 if (winner) {
-                    titleEl.textContent = '🎉 遊戲結束 🎉';
-                    messageEl.innerHTML = `<span class="text-2xl font-bold text-green-600">${winner} 獲勝！</span>`;
+                    titleEl.textContent = '🏆 遊戲結束 🏆';
+                    messageEl.innerHTML = `<span class="text-3xl font-bold text-green-400">${winner} 獲勝！</span>`;
                 } else if (reason) {
                     titleEl.textContent = '遊戲結束';
-                    messageEl.innerHTML = `<span class="text-xl text-gray-600">${reason}</span>`;
+                    messageEl.innerHTML = `<span class="text-2xl text-secondary">${reason}</span>`;
                 }
                 
-                // 顯示最終排名
                 if (this.gameState) {
                     const rankings = [...this.gameState.players]
                         .filter(p => !p.isComputer)
-                        .sort((a, b) => a.hand.length - b.hand.length);
+                        .sort((a, b) => (a.hand.length || 0) - (b.hand.length || 0));
                     
-                    rankingsEl.innerHTML = '<h3 class="text-lg font-semibold mb-2">最終排名</h3>' +
+                    rankingsEl.innerHTML = '<h3 class="text-xl font-bold mb-4 text-center text-secondary">最終排名</h3>' +
                         rankings.map((player, index) => {
                             const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '👤';
                             const isMe = player.id === this.myPlayerId;
+                            const bgColor = index === 0 ? 'rgba(0, 230, 118, 0.1)' : 
+                                          index === 1 ? 'rgba(41, 121, 255, 0.1)' : 
+                                          index === 2 ? 'rgba(255, 193, 7, 0.1)' : 
+                                          'rgba(255, 255, 255, 0.05)';
                             return `
-                                <div class="flex justify-between items-center p-2 rounded ${isMe ? 'bg-blue-100' : 'bg-gray-100'}">
-                                    <span class="font-semibold">
+                                <div class="flex justify-between items-center p-4 rounded-lg" 
+                                     style="background: ${bgColor}; border: 1px solid rgba(255,255,255,0.1);">
+                                    <span class="font-bold text-xl">
                                         ${medal} ${player.name} ${isMe ? '(你)' : ''}
                                     </span>
-                                    <span class="text-gray-600">剩餘 ${player.hand.length} 張牌</span>
+                                    <span class="text-secondary">剩餘 ${player.handCount || 0} 張牌</span>
                                 </div>
                             `;
                         }).join('');
                 }
                 
-                // 重置按鈕狀態
                 document.getElementById('rematch-btn').disabled = false;
                 document.getElementById('rematch-btn').textContent = '再來一局';
                 document.getElementById('rematch-votes').classList.add('hidden');
-                
-                // 顯示遊戲結束畫面
+                document.getElementById('vote-list').innerHTML = '';
                 document.getElementById('game-over-screen').classList.remove('hidden');
             }
 
@@ -1058,26 +1562,50 @@
                 voteCountEl.textContent = votes.length;
                 totalPlayersEl.textContent = totalPlayers;
                 
-                // 顯示已投票的玩家
-                const votedPlayers = votes.map(playerId => {
-                    const player = this.gameState.players.find(p => p.id === playerId);
-                    return player ? player.name : '未知玩家';
-                });
+                if (this.gameState) {
+                    const votedPlayers = votes.map(playerId => {
+                        const player = this.gameState.players.find(p => p.id === playerId);
+                        return player ? player.name : '未知玩家';
+                    });
+                    
+                    voteListEl.innerHTML = votedPlayers.map(name => `
+                        <div class="text-center text-green-400 font-semibold">
+                            ✓ ${name} 已同意
+                        </div>
+                    `).join('');
+                }
+            }
+
+            showTurnNotification() {
+                const notification = document.createElement('div');
+                notification.className = 'turn-notification';
+                notification.textContent = '輪到你了！';
+                document.body.appendChild(notification);
                 
-                voteListEl.innerHTML = votedPlayers.map(name => `
-                    <div class="text-center text-green-600">
-                        ✓ ${name}
-                    </div>
-                `).join('');
+                // 播放提示音效果（使用 Web Audio API 創建簡單的提示音）
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                gainNode.gain.value = 0.1;
+                
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.1);
+                
+                setTimeout(() => {
+                    notification.style.animation = 'turnNotify 0.4s ease-in reverse';
+                    setTimeout(() => notification.remove(), 400);
+                }, 2000);
             }
 
             showWinCallout(message, isReason = false) {
                 const callout = document.getElementById('win-callout');
-                if (isReason) {
-                    callout.textContent = message;
-                } else {
-                    callout.textContent = `${message} 獲勝！`;
-                }
+                callout.textContent = isReason ? message : `${message} 獲勝！`;
                 callout.classList.remove('hidden');
                 setTimeout(() => callout.classList.add('hidden'), 3000);
             }
