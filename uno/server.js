@@ -435,11 +435,12 @@ class GameRoom {
         
         const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
         if (currentPlayer.isComputer) {
+            const computerThinkTime = Math.random() * 2000 + 1000; // 隨機 1-3 秒
             setTimeout(() => {
                 if (!this.gameState.isGameOver) {
                     this.computerTurn();
                 }
-            }, 2000);
+            }, computerThinkTime);
         } else {
             this.startTurnTimer();
         }
@@ -746,11 +747,12 @@ io.on('connection', (socket) => {
                 });
                 
                 if (gameState.players[0].isComputer) {
+                    const computerThinkTime = Math.random() * 2000 + 1000; // 隨機 1-3 秒
                     setTimeout(() => {
                         if (room.started && !room.gameState.isGameOver) {
                             room.computerTurn();
                         }
-                    }, 2000);
+                    }, computerThinkTime);
                 } else {
                     room.startTurnTimer();
                 }
