@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UNO</title>
+    <title>UNO Online</title>
     <link rel="icon" href="/icon.ico" type="image/x-icon">
 	<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1356046266101380"
      crossorigin="anonymous"></script>
@@ -31,8 +31,8 @@
             touch-action: manipulation;
             background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
             color: var(--text-primary);
-            min-height: 100vh;
-            overflow-x: hidden;
+            height: 100vh;
+            overflow: hidden;
         }
 
         body::before {
@@ -255,10 +255,15 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             min-width: 180px;
-            min-height: 180px;
             display: flex;
             flex-direction: column;
             align-items: center;
+        }
+        
+        .other-player-area {
+            /* *** 修改: 設定固定高度以確保佈局一致 *** */
+            height: 210px;
+            overflow: hidden;
         }
 
         .player-area.active-turn { 
@@ -288,12 +293,13 @@
             width: 100%;
             flex-grow: 1;
             min-height: 0;
-            overflow: visible;
+            overflow-y: auto;
             gap: 2px;
         }
         
         .other-player-hand {
-            max-height: 170px;
+            /* *** 修改: 設定固定高度以容納兩行卡牌 *** */
+            height: 172px; /* (80px card height + 6px y-margin) * 2 rows */
             overflow: hidden;
         }
         
@@ -315,6 +321,28 @@
         .discard-pile .card:hover, .draw-pile .card:hover { 
             transform: none; 
             box-shadow: var(--card-shadow); 
+        }
+        
+        #discard-pile .card {
+            width: 102px;
+            height: 156px;
+        }
+
+        #discard-pile .card .value-center {
+            font-size: 60px;
+        }
+
+        #discard-pile .card .corner-value {
+            font-size: 20px;
+        }
+
+        #discard-pile .card .action-icon {
+            width: 70%;
+            height: 70%;
+        }
+        
+        #discard-pile .card .wild-center-icon .value-center {
+            font-size: 34px;
         }
 
         .playable { 
@@ -502,14 +530,13 @@
         }
 
         #my-player-area {
-            min-height: 380px;
-            margin-bottom: 20px;
             background: rgba(26, 31, 58, 0.8);
-            overflow: visible;
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
         }
         
         #my-hand {
-            overflow: visible;
             padding: 10px 0;
         }
 
@@ -667,6 +694,13 @@
             font-weight: 600;
             color: var(--accent-yellow);
         }
+        
+        .truncate-player-name {
+            max-width: 250px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
         .player-list-item {
             background: rgba(255, 255, 255, 0.05);
@@ -763,12 +797,37 @@
         }
     </style>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen p-2">
+<body class="flex flex-col items-center justify-center h-screen p-2">
+    <audio id="bgm" src="/bgm.mp3" loop></audio>
+    
+    <!-- *** 新增: 按鈕容器 *** -->
+    <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
+        <button id="fullscreen-btn" class="p-3 rounded-full bg-slate-700/50 hover:bg-slate-600/70 transition-colors" title="全螢幕">
+            <svg id="fullscreen-enter-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+            </svg>
+            <svg id="fullscreen-exit-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white hidden">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
+            </svg>
+        </button>
+        <button id="mute-btn" class="p-3 rounded-full bg-slate-700/50 hover:bg-slate-600/70 transition-colors" title="靜音">
+            <svg id="unmute-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+            <svg id="mute-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white hidden">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <line x1="23" y1="9" x2="17" y2="15"></line>
+                <line x1="17" y1="9" x2="23" y2="15"></line>
+            </svg>
+        </button>
+    </div>
+    
     <div class="game-container w-full h-full flex items-center justify-center">
 
         <div id="room-setup" class="fixed inset-0 flex items-center justify-center z-50">
             <div class="modal-content p-10 max-w-md w-full">
-                <h1 class="logo-text text-center mb-10">UNO</h1>
+                <h1 class="logo-text text-center mb-10">UNO Online</h1>
                 
                 <div class="mb-8">
                     <input type="text" id="player-name" placeholder="輸入您的名字" 
@@ -815,27 +874,28 @@
                 </button>
             </div>
         </div>
-
-        <div id="game-board" class="w-full max-w-7xl mx-auto p-4 hidden flex flex-col justify-between h-[95vh]">
-            <div id="other-players-container" class="grid gap-4">
+        
+        <div id="game-board" class="w-full max-w-[90rem] mx-auto p-4 hidden flex flex-col h-full">
+            <div id="other-players-container" class="grid gap-4 flex-shrink-0">
             </div>
-
-            <div id="table-area" class="flex justify-around items-center my-6 p-8 rounded-3xl shadow-2xl relative">
+            
+            <!-- *** 修改: 增加 gap-x 來產生間距 *** -->
+            <div id="table-area" class="grid grid-cols-3 items-center gap-x-8 md:gap-x-12 my-4 p-4 md:p-6 rounded-3xl shadow-2xl relative flex-shrink-0">
                 
-                <div id="draw-pile-container" class="text-center">
+                <div id="draw-pile-container" class="text-center justify-self-end">
                     <h3 class="text-secondary font-semibold text-lg mb-2">抽牌堆</h3>
                     <div id="draw-pile" class="draw-pile"></div>
                     <p class="text-secondary text-sm mt-2">(<span id="draw-pile-count">0</span> 張)</p>
                 </div>
 
-                <div id="discard-pile-container" class="text-center">
+                <div id="discard-pile-container" class="text-center justify-self-center">
                     <h3 class="text-secondary font-semibold text-lg mb-2">棄牌堆</h3>
                     <div id="discard-pile" class="discard-pile"></div>
                 </div>
 
-                <div id="center-info-area" class="flex flex-col items-center justify-center text-center mx-6 px-8 py-6 rounded-2xl shadow-xl">
-                    <div id="active-player-display" class="text-2xl font-bold mb-3 neon-text">等待開始</div>
-                    <div id="turn-timer-display" class="text-lg mb-3">思考時間: 10s</div>
+                <div id="center-info-area" class="flex flex-col items-center justify-center text-center justify-self-start px-4 py-6 rounded-2xl shadow-xl">
+                    <div id="active-player-display" class="text-2xl font-bold mb-3 neon-text truncate-player-name">等待開始</div>
+                    <div id="turn-timer-display" class="text-lg mb-3">思考時間: 15s</div>
                     <div id="stack-penalty-display">累積懲罰: +0</div>
                     <div id="current-color-display" class="mt-3 flex items-center">
                         <span class="font-semibold text-secondary">當前顏色:</span>
@@ -844,8 +904,8 @@
                 </div>
 
             </div>
-
-            <div id="my-player-area" class="player-area current-player mx-auto p-6 w-full">
+            
+            <div id="my-player-area" class="player-area current-player mx-auto p-6 w-full flex-grow min-h-0">
                 <h2 class="text-2xl font-bold mb-4 neon-text">
                     <span id="my-name">我</span> (<span id="my-card-count">0</span>)
                 </h2>
@@ -915,6 +975,21 @@
                 this.canPlayDrawnCard = false;
                 this.turnTimer = null;
                 this.turnTimerInterval = null;
+                this.bgm = document.getElementById('bgm');
+                
+                this.muteBtn = document.getElementById('mute-btn');
+                this.unmuteIcon = document.getElementById('unmute-icon');
+                this.muteIcon = document.getElementById('mute-icon');
+                this.isMuted = false;
+
+                // *** 新增: 全螢幕按鈕元素 ***
+                this.fullscreenBtn = document.getElementById('fullscreen-btn');
+                this.fullscreenEnterIcon = document.getElementById('fullscreen-enter-icon');
+                this.fullscreenExitIcon = document.getElementById('fullscreen-exit-icon');
+
+                if (this.bgm) {
+                    this.bgm.volume = 0.3;
+                }
                 this.setupSocketListeners();
                 this.setupUIListeners();
             }
@@ -1032,6 +1107,10 @@
                 });
 
                 this.socket.on('returnToWaitingRoom', ({ players }) => {
+                    if (this.bgm) {
+                        this.bgm.pause();
+                        this.bgm.currentTime = 0;
+                    }
                     document.getElementById('game-over-screen').classList.add('hidden');
                     document.getElementById('game-board').classList.add('hidden');
                     document.getElementById('waiting-room').classList.remove('hidden');
@@ -1095,6 +1174,46 @@
                 document.getElementById('leave-game-btn').addEventListener('click', () => {
                     location.reload();
                 });
+                
+                this.muteBtn.addEventListener('click', () => {
+                    this.isMuted = !this.isMuted;
+                    this.bgm.muted = this.isMuted;
+                    if (this.isMuted) {
+                        this.unmuteIcon.classList.add('hidden');
+                        this.muteIcon.classList.remove('hidden');
+                    } else {
+                        this.unmuteIcon.classList.remove('hidden');
+                        this.muteIcon.classList.add('hidden');
+                    }
+                });
+
+                // *** 新增: 全螢幕按鈕事件 ***
+                this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+                document.addEventListener('fullscreenchange', () => this.updateFullscreenIcon());
+            }
+
+            // *** 新增: 全螢幕切換方法 ***
+            toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        console.error(`無法啟用全螢幕模式: ${err.message} (${err.name})`);
+                    });
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    }
+                }
+            }
+
+            // *** 新增: 更新全螢幕圖示方法 ***
+            updateFullscreenIcon() {
+                if (document.fullscreenElement) {
+                    this.fullscreenEnterIcon.classList.add('hidden');
+                    this.fullscreenExitIcon.classList.remove('hidden');
+                } else {
+                    this.fullscreenEnterIcon.classList.remove('hidden');
+                    this.fullscreenExitIcon.classList.add('hidden');
+                }
             }
 
             showError(message) {
@@ -1111,6 +1230,9 @@
             }
 
             showGameBoard() {
+                if(this.bgm) {
+                    this.bgm.play().catch(e => console.log("BGM播放失敗，可能需要使用者互動。", e));
+                }
                 document.getElementById('waiting-room').classList.add('hidden');
                 document.getElementById('game-board').classList.remove('hidden');
             }
@@ -1123,7 +1245,6 @@
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
                 const isMyTurn = currentPlayer.id === this.myPlayerId;
                 
-                // 如果輪到玩家，顯示提示
                 if (isMyTurn && !currentPlayer.isComputer) {
                     this.showTurnNotification();
                 }
@@ -1207,11 +1328,11 @@
                     3: 'grid-cols-3'
                 }[otherPlayers.length] || 'grid-cols-3';
                 
-                container.className = `grid ${gridClass} gap-4`;
+                container.className = `grid ${gridClass} gap-4 flex-shrink-0`;
                 
                 otherPlayers.forEach(player => {
                     const playerDiv = document.createElement('div');
-                    playerDiv.className = 'player-area';
+                    playerDiv.className = 'player-area other-player-area';
                     playerDiv.id = `player-${player.id}`;
                     
                     const cardCount = player.handCount || player.hand.length;
@@ -1510,6 +1631,11 @@
             }
 
             showGameOverScreen(winner, reason) {
+                if (this.bgm) {
+                    this.bgm.pause();
+                    this.bgm.currentTime = 0;
+                }
+
                 const titleEl = document.getElementById('game-over-title');
                 const messageEl = document.getElementById('game-over-message');
                 const rankingsEl = document.getElementById('final-rankings');
@@ -1582,7 +1708,6 @@
                 notification.textContent = '輪到你了！';
                 document.body.appendChild(notification);
                 
-                // 播放提示音效果（使用 Web Audio API 創建簡單的提示音）
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
