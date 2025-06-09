@@ -24,7 +24,7 @@ class GameRoom {
         this.maxPlayers = 4;
         this.started = false;
         this.turnTimer = null;
-        this.turnTimerDuration = 10000;
+        this.turnTimerDuration = 15000;
         this.turnStartTime = null;
         this.rematchVotes = new Set(); // 追蹤同意再來一局的玩家
     }
