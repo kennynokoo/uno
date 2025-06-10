@@ -30,6 +30,7 @@ class GameRoom {
         this.gameRules = {
             jumpIn: false,
             shieldCards: false,
+            sharePain: false,
             startingHandSize: 7
         };
         this.jumpInWindow = null;
@@ -120,7 +121,8 @@ class GameRoom {
             playerHasDrawnThisTurn: false,
             skipNextPlayer: false,
             gameRules: this.gameRules,
-            lastPlayTime: Date.now()
+            lastPlayTime: Date.now(),
+            sharePainBindings: {}
         };
 
         this.createDeck();
@@ -167,6 +169,12 @@ class GameRoom {
         if (this.gameRules.shieldCards) {
             for (let i = 0; i < 4; i++) {
                 this.gameState.deck.push({ color: 'white', value: 'shield', type: 'shield', display: '🛡️' });
+            }
+        }
+
+        if (this.gameRules.sharePain) {
+            for (let i = 0; i < 2; i++) {
+                this.gameState.deck.push({ color: 'white', value: 'sharePain', type: 'sharePain', display: '🔗' });
             }
         }
     }
@@ -240,6 +248,10 @@ class GameRoom {
         if (move.type === 'jumpIn') {
             return this.jumpIn(playerId, move.cardIndex);
         }
+
+        if (move.type === 'playSharePainCard') {
+            return this.playSharePainCard(playerId, move.cardIndex, move.targetPlayerId);
+        }
         
         const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
         
@@ -259,6 +271,64 @@ class GameRoom {
             default:
                 return { success: false, error: '無效的操作' };
         }
+    }
+
+    playSharePainCard(playerId, cardIndex, targetPlayerId) {
+        const player = this.gameState.players.find(p => p.id === playerId);
+        const targetPlayer = this.gameState.players.find(p => p.id === targetPlayerId);
+        
+        if (!player || !targetPlayer) {
+            return { success: false, error: '玩家不存在' };
+        }
+
+        if (cardIndex < 0 || cardIndex >= player.hand.length) {
+            return { success: false, error: '無效的卡片' };
+        }
+
+        const card = player.hand[cardIndex];
+        if (card.type !== 'sharePain') {
+            return { success: false, error: '不是同甘共苦牌' };
+        }
+
+        const topCard = this.gameState.discardPile[this.gameState.discardPile.length - 1];
+        if (!this.isCardPlayable(card, topCard, player.hand.length)) {
+            return { success: false, error: '這張牌不能出' };
+        }
+
+        player.hand.splice(cardIndex, 1);
+        this.gameState.discardPile.push(card);
+
+        // 清除所有現有的綁定關係（全場只能有1對）
+        this.gameState.sharePainBindings = {};
+        
+        // 建立新的綁定關係
+        this.gameState.sharePainBindings[playerId] = {
+            user: playerId,
+            target: targetPlayerId
+        };
+
+        let newUnoPlayer = null;
+        if (player.hand.length === 1 && !this.gameState.showedUno.includes(player.id)) {
+            this.gameState.showedUno.push(player.id);
+            newUnoPlayer = player.id;
+        }
+
+        if (player.hand.length === 0) {
+            this.gameState.isGameOver = true;
+            this.clearTurnTimer();
+            return { success: true, winner: player.name };
+        }
+
+        this.nextTurn();
+        this.startJumpInWindow();
+
+        return { 
+            success: true, 
+            sharePainUsed: true,
+            userId: playerId,
+            targetId: targetPlayerId,
+            newUnoPlayer: newUnoPlayer
+        };
     }
 
     jumpIn(playerId, cardIndex) {
@@ -332,9 +402,7 @@ class GameRoom {
             const previousPlayerIndex = this.getPreviousPlayerIndex();
             const previousPlayer = this.gameState.players[previousPlayerIndex];
             
-            for (let i = 0; i < this.gameState.stackPenalty; i++) {
-                previousPlayer.hand.push(this.drawCardFromDeck());
-            }
+            const penaltyResult = this.applyPenaltyCards(previousPlayer.id, this.gameState.stackPenalty, 'shield');
             
             player.hand.splice(cardIndex, 1);
             this.gameState.discardPile.push(card);
@@ -349,14 +417,18 @@ class GameRoom {
                 success: true, 
                 shieldUsed: true,
                 shieldUserId: playerId,
-                attackerId: previousPlayer.id
+                attackerId: previousPlayer.id,
+                sharePainTriggered: penaltyResult.sharePainTriggered,
+                triggerPlayer: penaltyResult.triggerPlayer,
+                affectedPlayers: penaltyResult.affectedPlayers,
+                penaltyCount: penaltyResult.penaltyCount
             };
         }
 
         player.hand.splice(cardIndex, 1);
         this.gameState.discardPile.push(card);
         
-        if (card.type !== 'shield') {
+        if (card.type !== 'shield' && card.type !== 'sharePain') {
             this.gameState.currentColorInPlay = card.color === 'black' ? null : card.color;
         }
 
@@ -414,15 +486,22 @@ class GameRoom {
         }
 
         if (this.gameState.isStackActive) {
-            for (let i = 0; i < this.gameState.stackPenalty; i++) {
-                player.hand.push(this.drawCardFromDeck());
-            }
+            const penaltyResult = this.applyPenaltyCards(playerId, this.gameState.stackPenalty, 'stack');
+            
             this.gameState.isStackActive = false;
             this.gameState.stackPenalty = 0;
             this.gameState.stackType = null;
             this.gameState.playerHasDrawnThisTurn = true;
             this.nextTurn();
-            return { success: true, drewPenalty: true };
+            
+            return { 
+                success: true, 
+                drewPenalty: true,
+                sharePainTriggered: penaltyResult.sharePainTriggered,
+                triggerPlayer: penaltyResult.triggerPlayer,
+                affectedPlayers: penaltyResult.affectedPlayers,
+                penaltyCount: penaltyResult.penaltyCount
+            };
         }
 
         const drawnCard = this.drawCardFromDeck();
@@ -465,6 +544,62 @@ class GameRoom {
         }
     }
 
+    applyPenaltyCards(targetPlayerId, penaltyCount, reason = 'normal') {
+        const targetPlayer = this.gameState.players.find(p => p.id === targetPlayerId);
+        if (!targetPlayer) return { sharePainTriggered: false };
+
+        let sharePainTriggered = false;
+        let affectedPlayers = [targetPlayerId];
+        let triggerPlayer = targetPlayerId;
+        let partnerPlayer = null;
+
+        if (this.gameRules.sharePain && (reason === 'stack' || reason === 'shield')) {
+            // 檢查是否有綁定關係（雙向檢查）
+            let binding = null;
+            
+            // 檢查作為用戶的綁定
+            if (this.gameState.sharePainBindings[targetPlayerId]) {
+                binding = this.gameState.sharePainBindings[targetPlayerId];
+                partnerPlayer = this.gameState.players.find(p => p.id === binding.target);
+            } else {
+                // 檢查作為目標的綁定
+                for (const [userId, userBinding] of Object.entries(this.gameState.sharePainBindings)) {
+                    if (userBinding.target === targetPlayerId) {
+                        binding = userBinding;
+                        partnerPlayer = this.gameState.players.find(p => p.id === userId);
+                        break;
+                    }
+                }
+            }
+            
+            if (partnerPlayer && binding) {
+                for (let i = 0; i < penaltyCount; i++) {
+                    targetPlayer.hand.push(this.drawCardFromDeck());
+                    partnerPlayer.hand.push(this.drawCardFromDeck());
+                }
+                
+                sharePainTriggered = true;
+                affectedPlayers = [targetPlayerId, partnerPlayer.id];
+                triggerPlayer = targetPlayerId;
+            } else {
+                for (let i = 0; i < penaltyCount; i++) {
+                    targetPlayer.hand.push(this.drawCardFromDeck());
+                }
+            }
+        } else {
+            for (let i = 0; i < penaltyCount; i++) {
+                targetPlayer.hand.push(this.drawCardFromDeck());
+            }
+        }
+
+        return {
+            sharePainTriggered,
+            triggerPlayer,
+            affectedPlayers,
+            penaltyCount
+        };
+    }
+
     selectColor(playerId, color) {
         const validColors = ['red', 'yellow', 'green', 'blue'];
         if (!validColors.includes(color)) {
@@ -477,16 +612,10 @@ class GameRoom {
         const topCard = this.gameState.discardPile[this.gameState.discardPile.length - 1];
         this.applyCardEffect(topCard);
         
-        let skippedPlayerId = null;
-        if (topCard.type === 'wildDrawFour' && this.gameState.isStackActive) {
-            const nextIndex = this.getNextPlayerIndex();
-            skippedPlayerId = this.gameState.players[nextIndex].id;
-        }
-        
         this.nextTurn();
         this.startJumpInWindow();
 
-        return { success: true, skippedPlayerId: skippedPlayerId };
+        return { success: true };
     }
 
     isCardPlayable(card, topCard, handSize) {
@@ -504,6 +633,7 @@ class GameRoom {
         }
         
         if (card.color === 'black' || card.type === 'shield') return true;
+        if (this.gameRules.sharePain && card.type === 'sharePain') return true;
         
         const effectiveColor = this.gameState.currentColorInPlay || topCard.color;
         
@@ -605,17 +735,13 @@ class GameRoom {
         const currentPlayerId = currentPlayer.id;
         
         if (!this.gameState.playerHasDrawnThisTurn) {
-            const player = this.gameState.players.find(p => p.id === currentPlayerId);
-            
             if (this.gameState.isStackActive) {
-                for (let i = 0; i < this.gameState.stackPenalty; i++) {
-                    player.hand.push(this.drawCardFromDeck());
-                }
+                const penaltyResult = this.applyPenaltyCards(currentPlayerId, this.gameState.stackPenalty, 'timeout');
                 this.gameState.isStackActive = false;
                 this.gameState.stackPenalty = 0;
                 this.gameState.stackType = null;
             } else {
-                player.hand.push(this.drawCardFromDeck());
+                this.applyPenaltyCards(currentPlayerId, 1, 'timeout');
             }
         }
         
@@ -658,9 +784,14 @@ class GameRoom {
         }
         
         let playableCardIndex = -1;
+        let isSharePainCard = false;
+        
         for (let i = 0; i < computer.hand.length; i++) {
             if (this.isCardPlayable(computer.hand[i], topCard, computer.hand.length)) {
                 playableCardIndex = i;
+                if (computer.hand[i].type === 'sharePain') {
+                    isSharePainCard = true;
+                }
                 break;
             }
         }
@@ -669,39 +800,43 @@ class GameRoom {
         let move;
 
         if (playableCardIndex !== -1) {
-            result = this.playCard(computer.id, playableCardIndex);
-            move = { type: 'playCard', cardIndex: playableCardIndex, playerId: computer.id };
-            
-            if (result.needColorSelection) {
-                const colors = ['red', 'yellow', 'green', 'blue'];
-                const colorCounts = { red: 0, yellow: 0, green: 0, blue: 0 };
+            if (isSharePainCard && this.gameRules.sharePain) {
+                // 電腦使用同甘共苦牌
+                const availableTargets = this.gameState.players.filter(p => p.id !== computer.id);
+                let selectedTarget = null;
                 
-                computer.hand.forEach(card => {
-                    if (card.color !== 'black' && card.color !== 'white') colorCounts[card.color]++;
-                });
-                
-                let bestColor = colors[0];
-                let maxCount = -1;
-                for (const color of colors) {
-                    if (colorCounts[color] > maxCount) {
-                        maxCount = colorCounts[color];
-                        bestColor = color;
+                if (availableTargets.length > 0) {
+                    // 選擇手牌最多的玩家作為目標（分擔風險）
+                    selectedTarget = availableTargets.reduce((max, player) => 
+                        (player.hand.length > max.hand.length) ? player : max
+                    );
+                    
+                    result = this.playSharePainCard(computer.id, playableCardIndex, selectedTarget.id);
+                    move = { type: 'playSharePainCard', cardIndex: playableCardIndex, playerId: computer.id, targetPlayerId: selectedTarget.id };
+                } else {
+                    // 沒有可選目標，尋找其他可出的牌
+                    playableCardIndex = -1;
+                    for (let i = 0; i < computer.hand.length; i++) {
+                        if (this.isCardPlayable(computer.hand[i], topCard, computer.hand.length) && computer.hand[i].type !== 'sharePain') {
+                            playableCardIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    if (playableCardIndex !== -1) {
+                        result = this.playCard(computer.id, playableCardIndex);
+                        move = { type: 'playCard', cardIndex: playableCardIndex, playerId: computer.id };
                     }
                 }
-                
-                const colorResult = this.selectColor(computer.id, bestColor);
-                result = { ...colorResult, newUnoPlayer: result.newUnoPlayer, skippedPlayerId: result.skippedPlayerId };
+            } else {
+                result = this.playCard(computer.id, playableCardIndex);
+                move = { type: 'playCard', cardIndex: playableCardIndex, playerId: computer.id };
             }
-        } else {
-            result = this.drawCard(computer.id);
-            move = { type: 'drawCard', playerId: computer.id };
             
-            if (!result.drewPenalty && result.canPlayDrawnCard) {
-                const playResult = this.playCard(computer.id, computer.hand.length - 1);
-                move = { type: 'playCard', cardIndex: computer.hand.length, playerId: computer.id };
-                result = playResult;
-                
-                if (playResult.needColorSelection) {
+            if (result && result.needColorSelection) {
+                // 添加顏色選擇思考時間
+                const colorThinkTime = Math.random() * 1000 + 1000; // 1-2秒
+                setTimeout(() => {
                     const colors = ['red', 'yellow', 'green', 'blue'];
                     const colorCounts = { red: 0, yellow: 0, green: 0, blue: 0 };
                     
@@ -719,16 +854,100 @@ class GameRoom {
                     }
                     
                     const colorResult = this.selectColor(computer.id, bestColor);
-                    result = { ...colorResult, newUnoPlayer: playResult.newUnoPlayer, skippedPlayerId: playResult.skippedPlayerId };
-                }
+                    const finalResult = { ...colorResult, newUnoPlayer: result.newUnoPlayer, skippedPlayerId: result.skippedPlayerId };
+                    
+                    this.broadcastGameUpdate(move, finalResult);
+                    
+                    if (finalResult && finalResult.winner) {
+                        this.clearTurnTimer();
+                        this.io.to(this.roomId).emit('gameOver', { winner: finalResult.winner });
+                    }
+                }, colorThinkTime);
+                return;
+            }
+        } else {
+            result = this.drawCard(computer.id);
+            move = { type: 'drawCard', playerId: computer.id };
+            
+            if (!result.drewPenalty && result.canPlayDrawnCard) {
+                // 添加抽牌後出牌的思考時間
+                const secondThinkTime = Math.random() * 1500 + 1500; // 1.5-3秒
+                setTimeout(() => {
+                    const drawnCard = computer.hand[computer.hand.length - 1];
+                    let secondMove;
+                    let playResult;
+                    
+                    if (drawnCard.type === 'sharePain' && this.gameRules.sharePain) {
+                        // 抽到的是同甘共苦牌
+                        const availableTargets = this.gameState.players.filter(p => p.id !== computer.id);
+                        if (availableTargets.length > 0) {
+                            const selectedTarget = availableTargets.reduce((max, player) => 
+                                (player.hand.length > max.hand.length) ? player : max
+                            );
+                            
+                            playResult = this.playSharePainCard(computer.id, computer.hand.length - 1, selectedTarget.id);
+                            secondMove = { type: 'playSharePainCard', cardIndex: computer.hand.length, playerId: computer.id, targetPlayerId: selectedTarget.id };
+                        } else {
+                            // 沒有目標，不出牌
+                            this.broadcastGameUpdate(move, result);
+                            return;
+                        }
+                    } else {
+                        playResult = this.playCard(computer.id, computer.hand.length - 1);
+                        secondMove = { type: 'playCard', cardIndex: computer.hand.length, playerId: computer.id };
+                    }
+                    
+                    if (playResult.needColorSelection) {
+                        // 再次添加顏色選擇思考時間
+                        const colorThinkTime = Math.random() * 1000 + 1000; // 1-2秒
+                        setTimeout(() => {
+                            const colors = ['red', 'yellow', 'green', 'blue'];
+                            const colorCounts = { red: 0, yellow: 0, green: 0, blue: 0 };
+                            
+                            computer.hand.forEach(card => {
+                                if (card.color !== 'black' && card.color !== 'white') colorCounts[card.color]++;
+                            });
+                            
+                            let bestColor = colors[0];
+                            let maxCount = -1;
+                            for (const color of colors) {
+                                if (colorCounts[color] > maxCount) {
+                                    maxCount = colorCounts[color];
+                                    bestColor = color;
+                                }
+                            }
+                            
+                            const colorResult = this.selectColor(computer.id, bestColor);
+                            const finalResult = { ...colorResult, newUnoPlayer: playResult.newUnoPlayer, skippedPlayerId: playResult.skippedPlayerId };
+                            
+                            this.broadcastGameUpdate(secondMove, finalResult);
+                            
+                            if (finalResult && finalResult.winner) {
+                                this.clearTurnTimer();
+                                this.io.to(this.roomId).emit('gameOver', { winner: finalResult.winner });
+                            }
+                        }, colorThinkTime);
+                        return;
+                    } else {
+                        this.broadcastGameUpdate(secondMove, playResult);
+                        
+                        if (playResult && playResult.winner) {
+                            this.clearTurnTimer();
+                            this.io.to(this.roomId).emit('gameOver', { winner: playResult.winner });
+                        }
+                    }
+                }, secondThinkTime);
+                return;
             }
         }
 
-        this.broadcastGameUpdate(move, result);
+        if (result) {
+            this.broadcastGameUpdate(move, result);
 
-        if (result && result.winner) {
-            this.clearTurnTimer();
-            this.io.to(this.roomId).emit('gameOver', { winner: result.winner });
+            if (result.winner) {
+                this.clearTurnTimer();
+                this.io.to(this.roomId).emit('gameOver', { winner: result.winner });
+            }
         }
     }
 
@@ -991,7 +1210,7 @@ io.on('connection', (socket) => {
                         room.clearTurnTimer();
                         io.to(playerInfo.roomId).emit('gameOver', {
                             winner: null,
-                            reason: `${playerInfo.playerName || 'A player'} has left the game.`
+                            reason: `${playerInfo.playerName || '一位玩家'} 已中離`
                         });
                         room.resetForRematch();
                     }
