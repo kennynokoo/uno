@@ -970,6 +970,143 @@
                 opacity: 1;
             }
         }
+
+        /* 同甘共苦牌相關樣式 */
+        #player-selector-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(26, 31, 58, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000;
+            min-width: 400px;
+        }
+
+        .player-select-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            margin: 12px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .player-select-option:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--accent-purple);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(101, 31, 255, 0.3);
+        }
+
+        .player-select-option.selected {
+            background: rgba(101, 31, 255, 0.2);
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 20px rgba(101, 31, 255, 0.5);
+        }
+
+        #share-pain-status {
+            position: fixed;
+            top: 15%;
+            right: 20px;
+            background: linear-gradient(135deg, var(--accent-purple) 0%, #3f51b5 100%);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 16px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            z-index: 1000;
+            display: none;
+            box-shadow: 
+                0 8px 32px rgba(101, 31, 255, 0.4),
+                inset 0 2px 4px rgba(255,255,255,0.2);
+            animation: sharePainPulse 2s ease-in-out infinite;
+            min-width: 200px;
+            text-align: center;
+        }
+
+        @keyframes sharePainPulse {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 
+                    0 8px 32px rgba(101, 31, 255, 0.4),
+                    inset 0 2px 4px rgba(255,255,255,0.2);
+            }
+            50% { 
+                transform: scale(1.05);
+                box-shadow: 
+                    0 12px 40px rgba(101, 31, 255, 0.6),
+                    inset 0 2px 4px rgba(255,255,255,0.3);
+            }
+        }
+
+        .share-pain-notification {
+            position: fixed;
+            top: 35%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--accent-purple) 0%, #8e24aa 100%);
+            color: white;
+            padding: 30px 60px;
+            border-radius: 20px;
+            font-size: 2.2rem;
+            font-weight: 900;
+            font-family: 'Orbitron', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            box-shadow: 
+                0 15px 50px rgba(101, 31, 255, 0.8),
+                inset 0 2px 4px rgba(255,255,255,0.3);
+            animation: sharePainNotify 1s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            z-index: 2500;
+            text-align: center;
+            min-width: 400px;
+        }
+
+        @keyframes sharePainNotify {
+            0% {
+                transform: translateX(-50%) scale(0) rotate(-360deg);
+                opacity: 0;
+            }
+            60% {
+                transform: translateX(-50%) scale(1.2) rotate(10deg);
+            }
+            100% {
+                transform: translateX(-50%) scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+
+        .chain-animation {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .chain-link {
+            position: absolute;
+            width: 6px;
+            height: 20px;
+            background: linear-gradient(45deg, var(--accent-purple), #8e24aa);
+            border-radius: 3px;
+            animation: chainMove 1s ease-in-out;
+        }
+
+        @keyframes chainMove {
+            0% { opacity: 0; transform: scale(0) rotate(0deg); }
+            50% { opacity: 1; transform: scale(1.2) rotate(180deg); }
+            100% { opacity: 0; transform: scale(0) rotate(360deg); }
+        }
     </style>
 </head>
 <body class="flex flex-col items-center justify-center h-screen p-2">
@@ -980,6 +1117,7 @@
     <audio id="draw-two-sound" src="/draw-two.wav" preload="auto"></audio>
     <audio id="draw-four-sound" src="/draw-four.wav" preload="auto"></audio>
     <audio id="shield-sound" src="/Shield.mp3" preload="auto"></audio>
+    <audio id="share-pain-sound" src="/share-pain.mp3" preload="auto"></audio>
     
     <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
         <button id="fullscreen-btn" class="p-3 rounded-full bg-slate-700/50 hover:bg-slate-600/70 transition-colors" title="全螢幕">
@@ -1065,6 +1203,14 @@
                         
                         <div class="game-rule-toggle">
                             <div>
+                                <span class="font-semibold">同甘共苦 (Share Pain)</span>
+                                <p class="text-sm text-secondary">可選擇1人綁定，+2/+4懲罰時一起承受</p>
+                            </div>
+                            <div id="share-pain-toggle" class="toggle-switch" data-rule="sharePain"></div>
+                        </div>
+                        
+                        <div class="game-rule-toggle">
+                            <div>
                                 <span class="font-semibold">起始手牌數量</span>
                                 <p class="text-sm text-secondary">每位玩家的起始牌數</p>
                             </div>
@@ -1141,6 +1287,23 @@
             </div>
         </div>
 
+        <div id="player-selector-modal" class="hidden">
+            <h3 class="neon-text text-2xl text-center mb-8">同甘共苦 - 選擇綁定玩家</h3>
+            <p class="text-secondary text-center mb-6">選擇一位玩家與你共同承受 +2/+4 懲罰</p>
+            <div id="player-selector-list"></div>
+            <div class="flex justify-center mt-6 space-x-4">
+                <button id="confirm-share-pain" class="btn-primary" disabled style="opacity: 0.5;">確認綁定</button>
+                <button id="cancel-share-pain" class="btn-secondary">取消</button>
+            </div>
+        </div>
+
+        <div id="share-pain-status" class="hidden">
+            <div class="text-center">
+                <div class="text-lg font-bold">🔗 同甘共苦</div>
+                <div id="share-pain-partner" class="text-sm mt-1"></div>
+            </div>
+        </div>
+
         <div id="uno-callout" class="hidden">UNO!</div>
 
         <div id="win-callout" class="hidden">獲勝！</div>
@@ -1187,6 +1350,14 @@
                     fill="currentColor" stroke="rgba(0,0,0,0.3)" stroke-width="2"/>
                 <path d="M50 20 L70 30 L70 55 Q70 75 50 85 Q30 75 30 55 L30 30 Z" 
                     fill="rgba(255,255,255,0.3)"/>
+            </svg>`,
+            sharePain: `<svg viewBox="0 0 100 100" class="action-icon">
+                <circle cx="25" cy="40" r="12" stroke="currentColor" stroke-width="3" fill="none"/>
+                <circle cx="75" cy="40" r="12" stroke="currentColor" stroke-width="3" fill="none"/>
+                <path d="M 25 52 Q 50 35 75 52" stroke="currentColor" stroke-width="4" fill="none"/>
+                <path d="M 25 65 Q 50 82 75 65" stroke="currentColor" stroke-width="4" fill="none"/>
+                <line x1="50" y1="20" x2="50" y2="35" stroke="currentColor" stroke-width="3"/>
+                <line x1="50" y1="65" x2="50" y2="80" stroke="currentColor" stroke-width="3"/>
             </svg>`
         };
 
@@ -1202,11 +1373,14 @@
                 this.gameRules = {
                     jumpIn: false,
                     shieldCards: false,
+                    sharePain: false,
                     startingHandSize: 7
                 };
                 this.isRoomCreator = false;
                 this.jumpInWindow = null;
                 this.isAnimating = false;
+                this.selectedPlayerForSharePain = null;
+                this.pendingSharePainCard = null;
                 
                 this.bgm = document.getElementById('bgm');
                 this.playCardSound = document.getElementById('play-card-sound');
@@ -1215,6 +1389,7 @@
                 this.drawTwoSound = document.getElementById('draw-two-sound');
                 this.drawFourSound = document.getElementById('draw-four-sound');
                 this.shieldSound = document.getElementById('shield-sound');
+                this.sharePainSound = document.getElementById('share-pain-sound');
                 
                 this.muteBtn = document.getElementById('mute-btn');
                 this.unmuteIcon = document.getElementById('unmute-icon');
@@ -1232,10 +1407,12 @@
                 if (this.drawTwoSound) this.drawTwoSound.volume = 0.9;
                 if (this.drawFourSound) this.drawFourSound.volume = 0.9;
                 if (this.shieldSound) this.shieldSound.volume = 0.9;
+                if (this.sharePainSound) this.sharePainSound.volume = 0.9;
 
                 this.setupSocketListeners();
                 this.setupUIListeners();
                 this.setupRuleToggles();
+                this.setupSharePainModal();
             }
 
             playSound(sound) {
@@ -1248,6 +1425,7 @@
             setupRuleToggles() {
                 const jumpInToggle = document.getElementById('jump-in-toggle');
                 const shieldToggle = document.getElementById('shield-toggle');
+                const sharePainToggle = document.getElementById('share-pain-toggle');
                 const handSizeInput = document.getElementById('starting-hand-size');
                 const decreaseBtn = document.getElementById('hand-size-decrease');
                 const increaseBtn = document.getElementById('hand-size-increase');
@@ -1268,6 +1446,14 @@
                     }
                 });
 
+                sharePainToggle.addEventListener('click', () => {
+                    if (this.isRoomCreator) {
+                        sharePainToggle.classList.toggle('active');
+                        this.gameRules.sharePain = sharePainToggle.classList.contains('active');
+                        this.socket.emit('updateGameRules', this.gameRules);
+                    }
+                });
+
                 decreaseBtn.addEventListener('click', () => {
                     if (this.isRoomCreator && this.gameRules.startingHandSize > 3) {
                         this.gameRules.startingHandSize--;
@@ -1283,6 +1469,90 @@
                         this.socket.emit('updateGameRules', this.gameRules);
                     }
                 });
+            }
+
+            setupSharePainModal() {
+                document.getElementById('confirm-share-pain').addEventListener('click', () => {
+                    const confirmBtn = document.getElementById('confirm-share-pain');
+                    if (confirmBtn.disabled) return;
+                    
+                    if (this.selectedPlayerForSharePain && this.pendingSharePainCard !== null) {
+                        this.clearTurnTimer();
+                        this.socket.emit('gameMove', { 
+                            type: 'playSharePainCard', 
+                            cardIndex: this.pendingSharePainCard.cardIndex,
+                            targetPlayerId: this.selectedPlayerForSharePain
+                        });
+                        this.hidePlayerSelector();
+                    }
+                });
+
+                document.getElementById('cancel-share-pain').addEventListener('click', () => {
+                    this.hidePlayerSelector();
+                });
+            }
+
+            showPlayerSelector(cardIndex) {
+                this.pendingSharePainCard = { cardIndex };
+                this.selectedPlayerForSharePain = null;
+                
+                const modal = document.getElementById('player-selector-modal');
+                const listEl = document.getElementById('player-selector-list');
+                
+                listEl.innerHTML = '';
+                
+                const availablePlayers = this.gameState.players.filter(player => 
+                    player.id !== this.myPlayerId
+                );
+                
+                if (availablePlayers.length === 0) {
+                    listEl.innerHTML = '<div class="text-center text-secondary p-4">沒有其他玩家可以綁定</div>';
+                    modal.classList.remove('hidden');
+                    return;
+                }
+                
+                availablePlayers.forEach(player => {
+                    const option = document.createElement('div');
+                    option.className = 'player-select-option';
+                    const playerType = player.isComputer ? '(電腦)' : '(真人)';
+                    
+                    option.innerHTML = `
+                        <span class="font-semibold text-lg">${player.name} ${playerType}</span>
+                        <span class="text-secondary">${player.handCount || player.hand.length} 張牌</span>
+                    `;
+                    
+                    option.addEventListener('click', () => {
+                        document.querySelectorAll('.player-select-option').forEach(opt => 
+                            opt.classList.remove('selected'));
+                        option.classList.add('selected');
+                        this.selectedPlayerForSharePain = player.id;
+                        
+                        // 啟用確認按鈕
+                        const confirmBtn = document.getElementById('confirm-share-pain');
+                        confirmBtn.disabled = false;
+                        confirmBtn.style.opacity = '1';
+                    });
+                    
+                    listEl.appendChild(option);
+                });
+                
+                // 初始化時禁用確認按鈕
+                const confirmBtn = document.getElementById('confirm-share-pain');
+                confirmBtn.disabled = true;
+                confirmBtn.style.opacity = '0.5';
+                
+                modal.classList.remove('hidden');
+            }
+
+            hidePlayerSelector() {
+                document.getElementById('player-selector-modal').classList.add('hidden');
+                this.selectedPlayerForSharePain = null;
+                this.pendingSharePainCard = null;
+                
+                // 重置確認按鈕狀態
+                const confirmBtn = document.getElementById('confirm-share-pain');
+                confirmBtn.disabled = true;
+                confirmBtn.style.opacity = '0.5';
             }
 
             setupSocketListeners() {
@@ -1330,7 +1600,7 @@
                         return;
                     }
 
-                    const needsAnimation = lastMove && (lastMove.type === 'playCard' || lastMove.type === 'jumpIn') && gameState.discardPile.length > 0;
+                    const needsAnimation = lastMove && (lastMove.type === 'playCard' || lastMove.type === 'jumpIn' || lastMove.type === 'playSharePainCard') && gameState.discardPile.length > 0;
 
                     if (needsAnimation) {
                         this.isAnimating = true;
@@ -1350,6 +1620,7 @@
                         
                         if (topCard.type === 'drawTwo') { this.playSound(this.drawTwoSound); }
                         else if (topCard.type === 'wildDrawFour') { this.playSound(this.drawFourSound); }
+                        else if (topCard.type === 'sharePain') { this.playSound(this.sharePainSound); }
                         else { this.playSound(this.playCardSound); }
                         
                         await this.animateCardPlay(topCard, startElement, endElement);
@@ -1393,6 +1664,18 @@
                         if (shieldPlayer && attackPlayer) {
                             this.showShieldNotification(shieldPlayer.name, attackPlayer.name);
                         }
+                    }
+
+                    if (result && result.sharePainUsed) {
+                        const userPlayer = this.gameState.players.find(p => p.id === result.userId);
+                        const targetPlayer = this.gameState.players.find(p => p.id === result.targetId);
+                        if (userPlayer && targetPlayer) {
+                            this.showSharePainNotification(userPlayer.name, targetPlayer.name);
+                        }
+                    }
+
+                    if (result && result.sharePainTriggered) {
+                        this.showSharePainActivation(result.triggerPlayer, result.affectedPlayers, result.penaltyCount);
                     }
                     
                     if (result && result.timeout && result.forceEndTurn) {
@@ -1476,6 +1759,7 @@
                     document.getElementById('game-over-screen').classList.add('hidden');
                     document.getElementById('game-board').classList.add('hidden');
                     document.getElementById('waiting-room').classList.remove('hidden');
+                    document.getElementById('share-pain-status').classList.add('hidden');
                     this.updatePlayersList(players);
                     this.gameState = null;
                     this.canPlayDrawnCard = false;
@@ -1582,6 +1866,10 @@
                     
                     document.body.appendChild(cardEl);
 
+                    if (cardData.type === 'sharePain') {
+                        this.addChainAnimation(cardEl);
+                    }
+
                     requestAnimationFrame(() => {
                         cardEl.style.left = `${endRect.left + endRect.width / 2 - 51}px`;
                         cardEl.style.top = `${endRect.top + endRect.height / 2 - 78}px`;
@@ -1593,6 +1881,21 @@
                         resolve();
                     }, 600);
                 });
+            }
+
+            addChainAnimation(cardEl) {
+                const chainContainer = document.createElement('div');
+                chainContainer.className = 'chain-animation';
+                cardEl.appendChild(chainContainer);
+
+                for (let i = 0; i < 8; i++) {
+                    const chainLink = document.createElement('div');
+                    chainLink.className = 'chain-link';
+                    chainLink.style.left = `${Math.random() * 90}%`;
+                    chainLink.style.top = `${Math.random() * 90}%`;
+                    chainLink.style.animationDelay = `${Math.random() * 0.5}s`;
+                    chainContainer.appendChild(chainLink);
+                }
             }
 
             toggleFullscreen() {
@@ -1641,6 +1944,7 @@
             updateRulesDisplay() {
                 const jumpInToggle = document.getElementById('jump-in-toggle');
                 const shieldToggle = document.getElementById('shield-toggle');
+                const sharePainToggle = document.getElementById('share-pain-toggle');
                 const handSizeInput = document.getElementById('starting-hand-size');
                 const gameRulesSection = document.getElementById('game-rules-section');
 
@@ -1662,11 +1966,18 @@
                     shieldToggle.classList.remove('active');
                 }
 
+                if (this.gameRules.sharePain) {
+                    sharePainToggle.classList.add('active');
+                } else {
+                    sharePainToggle.classList.remove('active');
+                }
+
                 handSizeInput.value = this.gameRules.startingHandSize;
 
                 if (!this.isRoomCreator) {
                     jumpInToggle.style.pointerEvents = 'none';
                     shieldToggle.style.pointerEvents = 'none';
+                    sharePainToggle.style.pointerEvents = 'none';
                     document.getElementById('hand-size-decrease').disabled = true;
                     document.getElementById('hand-size-increase').disabled = true;
                 }
@@ -1780,6 +2091,7 @@
                 this.renderDrawPile();
                 this.updateGameInfo();
                 this.highlightCurrentPlayer();
+                this.updateSharePainStatus();
             }
 
             renderOtherPlayers() {
@@ -1805,9 +2117,22 @@
                     const maxCardsToShow = 14;
                     const cardsToDisplay = Math.min(cardCount, maxCardsToShow);
                     
+                    // 檢查該玩家是否有綁定關係（檢查所有綁定，不只是與我的）
+                    let isInSharePainBinding = false;
+                    if (this.gameState.sharePainBindings) {
+                        Object.values(this.gameState.sharePainBindings).forEach(binding => {
+                            if (binding.user === player.id || binding.target === player.id) {
+                                isInSharePainBinding = true;
+                            }
+                        });
+                    }
+                    
+                    // 添加綁定圖案，但不添加外框樣式
+                    const bindingIcon = isInSharePainBinding ? ' 🔗' : '';
+                    
                     playerDiv.innerHTML = `
                         <h3 class="text-base font-bold mb-2 neon-text text-sm">
-                            ${player.name} (${cardCount})
+                            ${player.name}${bindingIcon} (${cardCount})
                         </h3>
                         <div class="player-hand other-player-hand">
                             ${Array(cardsToDisplay).fill().map(() => this.renderCard({}, false, true).outerHTML).join('')}
@@ -1822,7 +2147,18 @@
                 const myPlayer = this.gameState.players.find(p => p.id === this.myPlayerId);
                 if (!myPlayer) return;
 
-                document.getElementById('my-name').textContent = myPlayer.name;
+                // 檢查我是否有綁定關係（檢查所有綁定）
+                let hasSharePainPartner = false;
+                if (this.gameState.sharePainBindings) {
+                    Object.values(this.gameState.sharePainBindings).forEach(binding => {
+                        if (binding.user === this.myPlayerId || binding.target === this.myPlayerId) {
+                            hasSharePainPartner = true;
+                        }
+                    });
+                }
+
+                const bindingIcon = hasSharePainPartner ? ' 🔗' : '';
+                document.getElementById('my-name').innerHTML = `${myPlayer.name}${bindingIcon}`;
                 document.getElementById('my-card-count').textContent = myPlayer.hand.length;
                 
                 const handEl = document.getElementById('my-hand');
@@ -1849,9 +2185,14 @@
                         cardEl.classList.add('playable');
                         cardEl.addEventListener('click', () => {
                             if (this.isAnimating) return;
-                            this.clearTurnTimer();
-                            this.canPlayDrawnCard = false;
-                            this.socket.emit('gameMove', { type: 'playCard', cardIndex: index });
+                            
+                            if (card.type === 'sharePain' && this.gameState.gameRules.sharePain) {
+                                this.showPlayerSelector(index);
+                            } else {
+                                this.clearTurnTimer();
+                                this.canPlayDrawnCard = false;
+                                this.socket.emit('gameMove', { type: 'playCard', cardIndex: index });
+                            }
                         });
                     } else if (canJumpIn) {
                         cardEl.classList.add('jumpable');
@@ -1924,6 +2265,12 @@
                 }
             }
 
+            updateSharePainStatus() {
+                // 簡化狀態顯示，主要顯示已經移到玩家名字旁邊
+                const statusEl = document.getElementById('share-pain-status');
+                statusEl.classList.add('hidden');
+            }
+
             highlightCurrentPlayer() {
                 document.querySelectorAll('.player-area').forEach(el => {
                     el.classList.remove('active-turn');
@@ -1986,6 +2333,12 @@
                         if (card.color === 'white') centerContentHTML = centerContentHTML.replace('fill="currentColor"', 'fill="#1a1f3a"');
                         cornerDisplay = '🛡️';
                         break;
+                    case 'sharePain':
+                        centerContentHTML = ICONS.sharePain;
+                        if (card.color === 'yellow') centerContentHTML = centerContentHTML.replace('stroke="currentColor"', 'stroke="#1a1f3a"');
+                        if (card.color === 'white') centerContentHTML = centerContentHTML.replace('stroke="currentColor"', 'stroke="#1a1f3a"');
+                        cornerDisplay = '🔗';
+                        break;
                 }
                 
                 cardDiv.innerHTML = `
@@ -2018,7 +2371,8 @@
                 }
                 
                 if (card.color === 'black') return true;
-                if (this.gameRules.shieldCards && card.type === 'shield') return false;
+                if (this.gameRules.shieldCards && card.type === 'shield') return true;
+                if (this.gameRules.sharePain && card.type === 'sharePain') return true;
                 
                 const effectiveColor = this.gameState.currentColorInPlay || topCard.color;
                 return card.color === effectiveColor || card.value === topCard.value;
@@ -2109,6 +2463,37 @@
                     notification.style.transition = 'opacity 0.4s';
                     setTimeout(() => notification.remove(), 400);
                 }, 1400);
+            }
+
+            showSharePainNotification(userName, targetName) {
+                const notification = document.createElement('div');
+                notification.className = 'share-pain-notification';
+                notification.innerHTML = `🔗 ${userName} 與 ${targetName} 綁定！`;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transition = 'opacity 0.6s';
+                    setTimeout(() => notification.remove(), 600);
+                }, 2000);
+            }
+
+            showSharePainActivation(triggerPlayer, affectedPlayers, penaltyCount) {
+                const triggerPlayerName = this.gameState.players.find(p => p.id === triggerPlayer)?.name || '未知';
+                const affectedNames = affectedPlayers.map(id => 
+                    this.gameState.players.find(p => p.id === id)?.name || '未知'
+                ).join(' & ');
+                
+                const notification = document.createElement('div');
+                notification.className = 'share-pain-notification';
+                notification.innerHTML = `⚡ 同甘共苦觸發！<br/>${affectedNames} 共同承受 +${penaltyCount}`;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transition = 'opacity 0.6s';
+                    setTimeout(() => notification.remove(), 600);
+                }, 2500);
             }
 
             showTimeoutMessage() {
