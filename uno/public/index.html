@@ -979,6 +979,7 @@
     <audio id="uno-sound" src="/uno.wav" preload="auto"></audio>
     <audio id="draw-two-sound" src="/draw-two.wav" preload="auto"></audio>
     <audio id="draw-four-sound" src="/draw-four.wav" preload="auto"></audio>
+    <audio id="shield-sound" src="/Shield.mp3" preload="auto"></audio>
     
     <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
         <button id="fullscreen-btn" class="p-3 rounded-full bg-slate-700/50 hover:bg-slate-600/70 transition-colors" title="全螢幕">
@@ -1213,6 +1214,7 @@
                 this.unoSound = document.getElementById('uno-sound');
                 this.drawTwoSound = document.getElementById('draw-two-sound');
                 this.drawFourSound = document.getElementById('draw-four-sound');
+                this.shieldSound = document.getElementById('shield-sound');
                 
                 this.muteBtn = document.getElementById('mute-btn');
                 this.unmuteIcon = document.getElementById('unmute-icon');
@@ -1229,6 +1231,7 @@
                 if (this.unoSound) this.unoSound.volume = 0.9;
                 if (this.drawTwoSound) this.drawTwoSound.volume = 0.9;
                 if (this.drawFourSound) this.drawFourSound.volume = 0.9;
+                if (this.shieldSound) this.shieldSound.volume = 0.9;
 
                 this.setupSocketListeners();
                 this.setupUIListeners();
@@ -1703,7 +1706,7 @@
                     } else {
                         this.clearTurnTimer();
                     }
-                }, 800);
+                }, 900);
             }
 
             clearTurnTimer() {
@@ -2045,14 +2048,14 @@
                 const callout = document.getElementById('uno-callout');
                 callout.textContent = `${playerName} UNO!`;
                 callout.classList.remove('hidden');
-                setTimeout(() => callout.classList.add('hidden'), 800);
+                setTimeout(() => callout.classList.add('hidden'), 900);
             }
 
             showSkipMessage(playerName) {
                 const msgDiv = document.createElement('div');
                 msgDiv.style.cssText = `
                     position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%);
-                    background: linear-gradient(135deg, #ff6f00 0%, #ff9800 100%); 
+                    background: linear-gradient(135deg, #ff6f00 0%, #ff9900 100%); 
                     color: white; padding: 30px 50px;
                     border-radius: 16px; font-size: 2rem; font-weight: 900;
                     z-index: 2000; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
@@ -2078,7 +2081,7 @@
                 setTimeout(() => {
                     msgDiv.style.animation = 'skipBounce 0.4s ease-in reverse';
                     setTimeout(() => msgDiv.remove(), 400);
-                }, 800);
+                }, 900);
             }
 
             showJumpInNotification(playerName) {
@@ -2091,20 +2094,21 @@
                     notification.style.opacity = '0';
                     notification.style.transition = 'opacity 0.4s';
                     setTimeout(() => notification.remove(), 400);
-                }, 800);
+                }, 900);
             }
 
             showShieldNotification(shieldPlayerName, attackPlayerName) {
+                this.playSound(this.shieldSound);
                 const notification = document.createElement('div');
                 notification.className = 'shield-notification';
-                notification.innerHTML = `🛡️ ${shieldPlayerName} 反彈給 ${attackPlayerName}！`;
+                notification.innerHTML = `🛡️反彈！`;
                 document.body.appendChild(notification);
                 
                 setTimeout(() => {
                     notification.style.opacity = '0';
                     notification.style.transition = 'opacity 0.4s';
                     setTimeout(() => notification.remove(), 400);
-                }, 800);
+                }, 1400);
             }
 
             showTimeoutMessage() {
@@ -2230,7 +2234,7 @@
                     oscillator.connect(gainNode);
                     gainNode.connect(audioContext.destination);
                     
-                    oscillator.frequency.value = 800;
+                    oscillator.frequency.value = 900;
                     oscillator.type = 'sine';
                     gainNode.gain.setValueAtTime(0, audioContext.currentTime);
                     gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.01);
