@@ -20,6 +20,7 @@
             --accent-green: #00e676;
             --accent-blue: #2979ff;
             --accent-purple: #651fff;
+            --accent-white: #f5f5f5;
             --text-primary: #ffffff;
             --text-secondary: #94a3b8;
             --card-shadow: 0 10px 30px rgba(0,0,0,0.5);
@@ -208,6 +209,11 @@
             background: linear-gradient(135deg, #424242 0%, #000000 100%); 
             color: white; 
         }
+        .card-white { 
+            background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%); 
+            color: #1a1f3a; 
+            border: 2px solid rgba(0,0,0,0.3);
+        }
 
         .wild-center-icon {
             width: 70%; 
@@ -362,6 +368,28 @@
                     0 0 60px var(--accent-yellow),
                     inset 0 0 30px rgba(255, 193, 7, 0.4);
                 border-color: #ffeb3b;
+            }
+        }
+
+        .jumpable {
+            animation: jumpableGlow 1s ease-in-out infinite;
+            cursor: pointer !important;
+        }
+
+        @keyframes jumpableGlow {
+            0%, 100% { 
+                box-shadow: 
+                    0 0 15px var(--accent-purple),
+                    0 0 30px var(--accent-purple),
+                    inset 0 0 15px rgba(101, 31, 255, 0.3);
+                border-color: var(--accent-purple);
+            }
+            50% { 
+                box-shadow: 
+                    0 0 25px var(--accent-purple),
+                    0 0 50px var(--accent-purple),
+                    inset 0 0 25px rgba(101, 31, 255, 0.4);
+                border-color: #7c4dff;
             }
         }
 
@@ -596,11 +624,13 @@
             background: linear-gradient(135deg, var(--accent-red) 0%, #c62828 100%);
             color: white;
             font-weight: 600;
-            padding: 10px 24px;
-            border-radius: 10px;
+            padding: 12px 32px;
+            border-radius: 12px;
             border: none;
             cursor: pointer;
             transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .btn-danger:hover {
@@ -793,6 +823,153 @@
             0%, 100% { filter: brightness(1); }
             50% { filter: brightness(1.2); }
         }
+
+        .game-rule-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+        }
+
+        .game-rule-toggle:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 60px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: var(--accent-green);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .toggle-switch.active::after {
+            transform: translateX(30px);
+        }
+
+        .number-input-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .number-input {
+            width: 80px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .number-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .jump-notification {
+            position: fixed;
+            top: 30%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-blue) 100%);
+            color: white;
+            padding: 20px 50px;
+            border-radius: 16px;
+            font-size: 1.8rem;
+            font-weight: 900;
+            font-family: 'Orbitron', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            box-shadow: 
+                0 10px 40px rgba(101, 31, 255, 0.6),
+                inset 0 2px 4px rgba(255,255,255,0.3);
+            animation: jumpNotify 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            z-index: 2500;
+        }
+
+        @keyframes jumpNotify {
+            0% {
+                transform: translateX(-50%) translateY(-50px) scale(0) rotate(-180deg);
+                opacity: 0;
+            }
+            50% {
+                transform: translateX(-50%) translateY(10px) scale(1.2) rotate(10deg);
+            }
+            100% {
+                transform: translateX(-50%) translateY(0) scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+
+        .shield-icon {
+            width: 60%;
+            height: 60%;
+            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
+        }
+
+        .shield-notification {
+            position: fixed;
+            top: 40%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--accent-white) 0%, #bdbdbd 100%);
+            color: #1a1f3a;
+            padding: 30px 60px;
+            border-radius: 16px;
+            font-size: 2rem;
+            font-weight: 900;
+            font-family: 'Orbitron', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            box-shadow: 
+                0 10px 40px rgba(255, 255, 255, 0.8),
+                inset 0 2px 4px rgba(255,255,255,0.5);
+            animation: shieldNotify 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            z-index: 2500;
+        }
+
+        @keyframes shieldNotify {
+            0% {
+                transform: translateX(-50%) scale(0) rotate(0deg);
+                opacity: 0;
+            }
+            50% {
+                transform: translateX(-50%) scale(1.3) rotate(360deg);
+            }
+            100% {
+                transform: translateX(-50%) scale(1) rotate(720deg);
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 <body class="flex flex-col items-center justify-center h-screen p-2">
@@ -855,7 +1032,7 @@
         </div>
 
         <div id="waiting-room" class="fixed inset-0 flex items-center justify-center z-50 hidden">
-            <div class="modal-content p-10 max-w-md w-full">
+            <div class="modal-content p-10 max-w-4xl w-full">
                 <h2 class="neon-text text-3xl text-center mb-8">等待玩家加入</h2>
                 
                 <div class="text-center mb-8">
@@ -863,17 +1040,56 @@
                     <div id="room-code-display" class="room-code"></div>
                     <p class="text-sm text-secondary mt-3">支援 1-4 位玩家，不足 4 人會有電腦補位</p>
                 </div>
-                
-                <div id="players-list" class="space-y-3 mb-8">
+
+                <div class="flex flex-col md:flex-row gap-8 mb-8">
+                    
+                    <div id="game-rules-section" class="md:w-1/2 hidden">
+                        <h3 class="text-xl font-semibold mb-4 text-center">遊戲規則設定</h3>
+                        
+                        <div class="game-rule-toggle">
+                            <div>
+                                <span class="font-semibold">搶牌/插話 (Jump-In)</span>
+                                <p class="text-sm text-secondary">可以在任何時候出完全相同的牌</p>
+                            </div>
+                            <div id="jump-in-toggle" class="toggle-switch" data-rule="jumpIn"></div>
+                        </div>
+                        
+                        <div class="game-rule-toggle">
+                            <div>
+                                <span class="font-semibold">神盾護體 (Shield Cards)</span>
+                                <p class="text-sm text-secondary">可反彈 +2、Skip、W+4 給出牌者</p>
+                            </div>
+                            <div id="shield-toggle" class="toggle-switch" data-rule="shieldCards"></div>
+                        </div>
+                        
+                        <div class="game-rule-toggle">
+                            <div>
+                                <span class="font-semibold">起始手牌數量</span>
+                                <p class="text-sm text-secondary">每位玩家的起始牌數</p>
+                            </div>
+                            <div class="number-input-group">
+                                <button id="hand-size-decrease" class="btn-secondary px-3 py-1">-</button>
+                                <input type="number" id="starting-hand-size" class="number-input" value="7" min="3" max="15" readonly>
+                                <button id="hand-size-increase" class="btn-secondary px-3 py-1">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="md:w-1/2">
+                         <h3 class="text-xl font-semibold mb-4 text-center">玩家列表</h3>
+                         <div id="players-list" class="space-y-3">
+                         </div>
+                    </div>
                 </div>
                 
-                <button id="ready-btn" class="btn-success w-full mb-3">
-                    準備開始
-                </button>
-                
-                <button id="leave-room-btn" class="btn-danger w-full">
-                    離開房間
-                </button>
+                <div class="grid grid-cols-2 gap-4">
+                    <button id="ready-btn" class="btn-success w-full">
+                        準備開始
+                    </button>
+                    <button id="leave-room-btn" class="btn-danger w-full">
+                        離開房間
+                    </button>
+                </div>
             </div>
         </div>
         
@@ -964,7 +1180,13 @@
             reverse: `<svg viewBox="0 0 100 100" class="action-icon"><path d="M 25 50 A 25 25 0 1 1 75 50 L 75 70 L 90 50 L 75 30 L 75 50" stroke-width="10" stroke="currentColor" fill="none"/><path d="M 75 50 A 25 25 0 1 1 25 50 L 25 30 L 10 50 L 25 70 L 25 50" stroke-width="10" stroke="currentColor" fill="none" transform="rotate(180 50 50)"/></svg>`,
             drawTwo: `<span class="value-center" style="font-size:36px; line-height:1;">+2</span>`,
             wild: `<span class="value-center" style="font-size:36px; line-height:1;">W</span>`,
-            wildDrawFour: `<span class="value-center" style="font-size:30px; line-height:1;">W+4</span>`
+            wildDrawFour: `<span class="value-center" style="font-size:30px; line-height:1;">W+4</span>`,
+            shield: `<svg viewBox="0 0 100 100" class="shield-icon">
+                <path d="M50 10 L80 25 L80 60 Q80 85 50 95 Q20 85 20 60 L20 25 Z" 
+                    fill="currentColor" stroke="rgba(0,0,0,0.3)" stroke-width="2"/>
+                <path d="M50 20 L70 30 L70 55 Q70 75 50 85 Q30 75 30 55 L30 30 Z" 
+                    fill="rgba(255,255,255,0.3)"/>
+            </svg>`
         };
 
         class MultiplayerUnoGame {
@@ -976,6 +1198,15 @@
                 this.canPlayDrawnCard = false;
                 this.turnTimer = null;
                 this.turnTimerInterval = null;
+                this.gameRules = {
+                    jumpIn: false,
+                    shieldCards: false,
+                    startingHandSize: 7
+                };
+                this.isRoomCreator = false;
+                this.jumpInWindow = null;
+                this.isAnimating = false;
+                
                 this.bgm = document.getElementById('bgm');
                 this.playCardSound = document.getElementById('play-card-sound');
                 this.drawCardSound = document.getElementById('draw-card-sound');
@@ -992,18 +1223,16 @@
                 this.fullscreenEnterIcon = document.getElementById('fullscreen-enter-icon');
                 this.fullscreenExitIcon = document.getElementById('fullscreen-exit-icon');
 
-                if (this.bgm) {
-                    this.bgm.volume = 0.2;
-                }
+                if (this.bgm) this.bgm.volume = 0.2;
                 if (this.playCardSound) this.playCardSound.volume = 0.8;
                 if (this.drawCardSound) this.drawCardSound.volume = 0.8;
-                if (this.unoSound) this.unoSound.volume = 0.8;
-                if (this.drawTwoSound) this.drawTwoSound.volume = 0.8;
-                if (this.drawFourSound) this.drawFourSound.volume = 0.8;
-
+                if (this.unoSound) this.unoSound.volume = 0.9;
+                if (this.drawTwoSound) this.drawTwoSound.volume = 0.9;
+                if (this.drawFourSound) this.drawFourSound.volume = 0.9;
 
                 this.setupSocketListeners();
                 this.setupUIListeners();
+                this.setupRuleToggles();
             }
 
             playSound(sound) {
@@ -1013,25 +1242,74 @@
                 }
             }
 
+            setupRuleToggles() {
+                const jumpInToggle = document.getElementById('jump-in-toggle');
+                const shieldToggle = document.getElementById('shield-toggle');
+                const handSizeInput = document.getElementById('starting-hand-size');
+                const decreaseBtn = document.getElementById('hand-size-decrease');
+                const increaseBtn = document.getElementById('hand-size-increase');
+
+                jumpInToggle.addEventListener('click', () => {
+                    if (this.isRoomCreator) {
+                        jumpInToggle.classList.toggle('active');
+                        this.gameRules.jumpIn = jumpInToggle.classList.contains('active');
+                        this.socket.emit('updateGameRules', this.gameRules);
+                    }
+                });
+
+                shieldToggle.addEventListener('click', () => {
+                    if (this.isRoomCreator) {
+                        shieldToggle.classList.toggle('active');
+                        this.gameRules.shieldCards = shieldToggle.classList.contains('active');
+                        this.socket.emit('updateGameRules', this.gameRules);
+                    }
+                });
+
+                decreaseBtn.addEventListener('click', () => {
+                    if (this.isRoomCreator && this.gameRules.startingHandSize > 3) {
+                        this.gameRules.startingHandSize--;
+                        handSizeInput.value = this.gameRules.startingHandSize;
+                        this.socket.emit('updateGameRules', this.gameRules);
+                    }
+                });
+
+                increaseBtn.addEventListener('click', () => {
+                    if (this.isRoomCreator && this.gameRules.startingHandSize < 15) {
+                        this.gameRules.startingHandSize++;
+                        handSizeInput.value = this.gameRules.startingHandSize;
+                        this.socket.emit('updateGameRules', this.gameRules);
+                    }
+                });
+            }
+
             setupSocketListeners() {
                 this.socket.on('roomCreated', ({ roomId, player }) => {
                     this.roomId = roomId;
                     this.myPlayerId = player.id;
+                    this.isRoomCreator = true;
                     this.showWaitingRoom(roomId);
+                    document.getElementById('game-rules-section').classList.remove('hidden');
                 });
 
-                this.socket.on('joinSuccess', ({ roomId, player }) => {
+                this.socket.on('joinSuccess', ({ roomId, player, gameRules }) => {
                     this.roomId = roomId;
                     this.myPlayerId = player.id;
+                    this.isRoomCreator = false;
+                    this.gameRules = gameRules;
                     this.showWaitingRoom(roomId);
+                    this.updateRulesDisplay();
                 });
 
                 this.socket.on('joinError', (error) => {
                     this.showError(error);
                 });
 
-                this.socket.on('roomUpdate', ({ players, canStart }) => {
+                this.socket.on('roomUpdate', ({ players, canStart, gameRules }) => {
                     this.updatePlayersList(players);
+                    if (gameRules) {
+                        this.gameRules = gameRules;
+                        this.updateRulesDisplay();
+                    }
                 });
 
                 this.socket.on('gameStart', ({ playerId, gameState }) => {
@@ -1043,23 +1321,45 @@
                     this.startTurnTimer();
                 });
 
-                this.socket.on('gameUpdate', ({ gameState, lastMove, result }) => {
+                this.socket.on('gameUpdate', async ({ gameState, lastMove, result }) => {
+                    if (this.isAnimating) {
+                        setTimeout(() => this.socket.listeners('gameUpdate')[0]({ gameState, lastMove, result }), 200);
+                        return;
+                    }
+
+                    const needsAnimation = lastMove && (lastMove.type === 'playCard' || lastMove.type === 'jumpIn') && gameState.discardPile.length > 0;
+
+                    if (needsAnimation) {
+                        this.isAnimating = true;
+
+                        const playerWhoPlayed = this.gameState.players.find(p => p.id === lastMove.playerId);
+                        if (playerWhoPlayed) {
+                            if (lastMove.cardIndex < playerWhoPlayed.hand.length) {
+                                playerWhoPlayed.hand.splice(lastMove.cardIndex, 1);
+                            }
+                        }
+                        this.renderMyHand();
+                        this.renderOtherPlayers();
+
+                        const topCard = gameState.discardPile[gameState.discardPile.length - 1];
+                        const startElement = document.getElementById(`player-${lastMove.playerId}`) || document.getElementById('my-player-area');
+                        const endElement = document.getElementById('discard-pile');
+                        
+                        if (topCard.type === 'drawTwo') { this.playSound(this.drawTwoSound); }
+                        else if (topCard.type === 'wildDrawFour') { this.playSound(this.drawFourSound); }
+                        else { this.playSound(this.playCardSound); }
+                        
+                        await this.animateCardPlay(topCard, startElement, endElement);
+                    }
+
                     const previousPlayerIndex = this.gameState ? this.gameState.currentPlayerIndex : -1;
                     const previousPlayerId = this.gameState ? this.gameState.players[previousPlayerIndex]?.id : null;
                     
                     this.gameState = gameState;
+                    this.checkJumpInOpportunity();
 
                     if (lastMove) {
-                        if (lastMove.type === 'playCard') {
-                            const topCard = gameState.discardPile[gameState.discardPile.length - 1];
-                            if (topCard.type === 'drawTwo') {
-                                this.playSound(this.drawTwoSound);
-                            } else if (topCard.type === 'wildDrawFour') {
-                                this.playSound(this.drawFourSound);
-                            } else {
-                                this.playSound(this.playCardSound);
-                            }
-                        } else if (lastMove.type === 'drawCard') {
+                        if (lastMove.type === 'drawCard') {
                             this.playSound(this.drawCardSound);
                         }
                     }
@@ -1073,7 +1373,22 @@
                     if (result && result.skippedPlayerId) {
                         const skippedPlayer = this.gameState.players.find(p => p.id === result.skippedPlayerId);
                         if (skippedPlayer) {
-                            setTimeout(() => this.showSkipMessage(skippedPlayer.name), 500);
+                            setTimeout(() => this.showSkipMessage(skippedPlayer.name), 100);
+                        }
+                    }
+                    
+                    if (result && result.jumpIn) {
+                        const jumpPlayer = this.gameState.players.find(p => p.id === lastMove.playerId);
+                        if (jumpPlayer) {
+                            this.showJumpInNotification(jumpPlayer.name);
+                        }
+                    }
+                    
+                    if (result && result.shieldUsed) {
+                        const shieldPlayer = this.gameState.players.find(p => p.id === result.shieldUserId);
+                        const attackPlayer = this.gameState.players.find(p => p.id === result.attackerId);
+                        if (shieldPlayer && attackPlayer) {
+                            this.showShieldNotification(shieldPlayer.name, attackPlayer.name);
                         }
                     }
                     
@@ -1083,6 +1398,7 @@
                             this.showTimeoutMessage();
                         }
                         this.startTurnTimer();
+                        if (needsAnimation) this.isAnimating = false;
                         return;
                     }
                     
@@ -1091,6 +1407,7 @@
                         if (lastMove.playerId === this.myPlayerId) {
                             this.showTimeoutMessage();
                         }
+                        if (needsAnimation) this.isAnimating = false;
                         return;
                     }
                     
@@ -1099,11 +1416,13 @@
                         if (result.remainingTime !== undefined) {
                             this.startTurnTimer(result.remainingTime);
                         }
+                        if (needsAnimation) this.isAnimating = false;
                         return;
                     }
                     
                     if (result.needColorSelection && lastMove.playerId === this.myPlayerId) {
                         this.showColorPicker();
+                        if (needsAnimation) this.isAnimating = false;
                         return;
                     }
                     
@@ -1116,10 +1435,15 @@
                     }
                     
                     this.startTurnTimer();
+                    if (needsAnimation) {
+                        this.isAnimating = false;
+                    }
                 });
 
                 this.socket.on('gameOver', ({ winner, reason }) => {
                     this.clearTurnTimer();
+                    this.clearJumpInWindow();
+                    this.isAnimating = false;
                     
                     if (winner) {
                         this.showWinCallout(winner);
@@ -1152,6 +1476,7 @@
                     this.updatePlayersList(players);
                     this.gameState = null;
                     this.canPlayDrawnCard = false;
+                    this.clearJumpInWindow();
                 });
 
                 this.socket.on('moveError', (error) => {
@@ -1226,6 +1551,47 @@
                 document.addEventListener('fullscreenchange', () => this.updateFullscreenIcon());
             }
 
+            animateCardPlay(cardData, startElement, endElement) {
+                return new Promise(resolve => {
+                    if (!startElement || !endElement) {
+                        resolve();
+                        return;
+                    }
+
+                    const startRect = startElement.getBoundingClientRect();
+                    const endRect = endElement.getBoundingClientRect();
+
+                    const cardEl = this.renderCard(cardData, true, false);
+                    cardEl.style.position = 'fixed';
+                    cardEl.style.zIndex = '5000';
+                    cardEl.style.width = '102px';
+                    cardEl.style.height = '156px';
+
+                    const cardValueCenter = cardEl.querySelector('.value-center');
+                    if (cardValueCenter) cardValueCenter.style.fontSize = '60px';
+                    const cardCornerValue = cardEl.querySelectorAll('.corner-value');
+                    cardCornerValue.forEach(el => el.style.fontSize = '20px');
+
+                    cardEl.style.left = `${startRect.left + startRect.width / 2 - 51}px`;
+                    cardEl.style.top = `${startRect.top + startRect.height / 2 - 78}px`;
+                    cardEl.style.transform = 'scale(0.6)';
+                    cardEl.style.transition = 'all 0.6s cubic-bezier(0.5, -0.3, 0.5, 1.3)';
+                    
+                    document.body.appendChild(cardEl);
+
+                    requestAnimationFrame(() => {
+                        cardEl.style.left = `${endRect.left + endRect.width / 2 - 51}px`;
+                        cardEl.style.top = `${endRect.top + endRect.height / 2 - 78}px`;
+                        cardEl.style.transform = `rotate(${Math.random() * 20 - 10}deg) scale(1)`;
+                    });
+
+                    setTimeout(() => {
+                        cardEl.remove();
+                        resolve();
+                    }, 600);
+                });
+            }
+
             toggleFullscreen() {
                 if (!document.fullscreenElement) {
                     document.documentElement.requestFullscreen().catch(err => {
@@ -1269,6 +1635,40 @@
                 document.getElementById('game-board').classList.remove('hidden');
             }
 
+            updateRulesDisplay() {
+                const jumpInToggle = document.getElementById('jump-in-toggle');
+                const shieldToggle = document.getElementById('shield-toggle');
+                const handSizeInput = document.getElementById('starting-hand-size');
+                const gameRulesSection = document.getElementById('game-rules-section');
+
+                if (this.isRoomCreator) {
+                    gameRulesSection.classList.remove('hidden');
+                } else {
+                    gameRulesSection.classList.remove('hidden');
+                }
+
+                if (this.gameRules.jumpIn) {
+                    jumpInToggle.classList.add('active');
+                } else {
+                    jumpInToggle.classList.remove('active');
+                }
+
+                if (this.gameRules.shieldCards) {
+                    shieldToggle.classList.add('active');
+                } else {
+                    shieldToggle.classList.remove('active');
+                }
+
+                handSizeInput.value = this.gameRules.startingHandSize;
+
+                if (!this.isRoomCreator) {
+                    jumpInToggle.style.pointerEvents = 'none';
+                    shieldToggle.style.pointerEvents = 'none';
+                    document.getElementById('hand-size-decrease').disabled = true;
+                    document.getElementById('hand-size-increase').disabled = true;
+                }
+            }
+
             startTurnTimer(initialTime = 15) {
                 this.clearTurnTimer();
                 
@@ -1303,13 +1703,44 @@
                     } else {
                         this.clearTurnTimer();
                     }
-                }, 1000);
+                }, 800);
             }
 
             clearTurnTimer() {
                 if (this.turnTimerInterval) {
                     clearInterval(this.turnTimerInterval);
                     this.turnTimerInterval = null;
+                }
+            }
+
+            checkJumpInOpportunity() {
+                this.clearJumpInWindow();
+                if (!this.gameState || !this.gameState.gameRules.jumpIn) return;
+                
+                const topCard = this.gameState.discardPile[this.gameState.discardPile.length - 1];
+                if (!topCard) return;
+                
+                const myPlayer = this.gameState.players.find(p => p.id === this.myPlayerId);
+                if (!myPlayer) return;
+                
+                const hasJumpableCard = myPlayer.hand.some(card => 
+                    card.color === topCard.color && 
+                    card.value === topCard.value && 
+                    card.type === topCard.type
+                );
+                
+                if (hasJumpableCard) {
+                    this.jumpInWindow = setTimeout(() => {
+                        this.clearJumpInWindow();
+                        this.renderMyHand();
+                    }, 3000);
+                }
+            }
+
+            clearJumpInWindow() {
+                if (this.jumpInWindow) {
+                    clearTimeout(this.jumpInWindow);
+                    this.jumpInWindow = null;
                 }
             }
 
@@ -1367,7 +1798,7 @@
                     playerDiv.className = 'player-area other-player-area';
                     playerDiv.id = `player-${player.id}`;
                     
-                    const cardCount = player.handCount || player.hand.length;
+                    const cardCount = player.handCount !== undefined ? player.handCount : player.hand.length;
                     const maxCardsToShow = 14;
                     const cardsToDisplay = Math.min(cardCount, maxCardsToShow);
                     
@@ -1400,15 +1831,31 @@
                 myPlayer.hand.forEach((card, index) => {
                     const isPlayableOnMyTurn = isMyTurn && this.isCardPlayable(card, topCard, myPlayer.hand.length);
                     const canPlayTheDrawnCard = this.canPlayDrawnCard && index === myPlayer.hand.length - 1;
+                    
+                    const canJumpIn = this.gameState.gameRules.jumpIn && 
+                                     this.jumpInWindow &&
+                                     !isMyTurn &&
+                                     topCard &&
+                                     card.color === topCard.color && 
+                                     card.value === topCard.value && 
+                                     card.type === topCard.type;
 
                     const cardEl = this.renderCard(card, true, false);
                     
                     if (isPlayableOnMyTurn || canPlayTheDrawnCard) {
                         cardEl.classList.add('playable');
                         cardEl.addEventListener('click', () => {
+                            if (this.isAnimating) return;
                             this.clearTurnTimer();
                             this.canPlayDrawnCard = false;
                             this.socket.emit('gameMove', { type: 'playCard', cardIndex: index });
+                        });
+                    } else if (canJumpIn) {
+                        cardEl.classList.add('jumpable');
+                        cardEl.addEventListener('click', () => {
+                            if (this.isAnimating) return;
+                            this.clearJumpInWindow();
+                            this.socket.emit('gameMove', { type: 'jumpIn', cardIndex: index });
                         });
                     } else {
                         cardEl.style.cursor = 'default';
@@ -1439,8 +1886,9 @@
                 const isMyTurn = this.gameState.currentPlayerIndex === this.gameState.players.findIndex(p => p.id === this.myPlayerId);
                 
                 if (isMyTurn && !this.gameState.playerHasDrawnThisTurn) {
-                    cardBack.style.cursor = 'pointer';
+                    cardBack.classList.add('playable');
                     cardBack.addEventListener('click', () => {
+                        if (this.isAnimating) return;
                         this.clearTurnTimer();
                         this.socket.emit('gameMove', { type: 'drawCard' });
                     });
@@ -1530,6 +1978,11 @@
                         centerContentHTML = `<div class="wild-center-icon"><span class="value-center">+4</span></div>`;
                         cornerDisplay = 'W+4';
                         break;
+                    case 'shield':
+                        centerContentHTML = ICONS.shield;
+                        if (card.color === 'white') centerContentHTML = centerContentHTML.replace('fill="currentColor"', 'fill="#1a1f3a"');
+                        cornerDisplay = '🛡️';
+                        break;
                 }
                 
                 cardDiv.innerHTML = `
@@ -1550,18 +2003,20 @@
                      if (card.color !== drawnCard.color || card.value !== drawnCard.value) return false;
                 }
 
-                if (handSize === 1 && card.type !== 'number' && card.type !== 'wild') {
+                if (handSize === 1 && (card.type === 'drawTwo' || card.type === 'wildDrawFour' || card.type === 'skip' || card.type === 'reverse')) {
                     return false;
                 }
                 
                 if (this.gameState.isStackActive) {
                     if (this.gameState.stackType === 'drawTwo' && card.type === 'drawTwo') return true;
                     if (this.gameState.stackType === 'wildDrawFour' && card.type === 'wildDrawFour') return true;
-                    if (this.gameState.stackType === 'skip' && card.type === 'skip' && card.color === topCard.color) return true;
+                    if (this.gameRules.shieldCards && card.type === 'shield') return true;
                     return false;
                 }
                 
                 if (card.color === 'black') return true;
+                if (this.gameRules.shieldCards && card.type === 'shield') return false;
+                
                 const effectiveColor = this.gameState.currentColorInPlay || topCard.color;
                 return card.color === effectiveColor || card.value === topCard.value;
             }
@@ -1580,7 +2035,8 @@
                     'yellow': '#ffc107', 
                     'green': '#00e676',
                     'blue': '#2979ff', 
-                    'black': '#424242'
+                    'black': '#424242',
+                    'white': '#f5f5f5'
                 };
                 return colors[color] || '#424242';
             }
@@ -1589,7 +2045,7 @@
                 const callout = document.getElementById('uno-callout');
                 callout.textContent = `${playerName} UNO!`;
                 callout.classList.remove('hidden');
-                setTimeout(() => callout.classList.add('hidden'), 1000);
+                setTimeout(() => callout.classList.add('hidden'), 800);
             }
 
             showSkipMessage(playerName) {
@@ -1622,7 +2078,33 @@
                 setTimeout(() => {
                     msgDiv.style.animation = 'skipBounce 0.4s ease-in reverse';
                     setTimeout(() => msgDiv.remove(), 400);
-                }, 1000);
+                }, 800);
+            }
+
+            showJumpInNotification(playerName) {
+                const notification = document.createElement('div');
+                notification.className = 'jump-notification';
+                notification.innerHTML = `⚡ ${playerName} 搶牌成功！`;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transition = 'opacity 0.4s';
+                    setTimeout(() => notification.remove(), 400);
+                }, 800);
+            }
+
+            showShieldNotification(shieldPlayerName, attackPlayerName) {
+                const notification = document.createElement('div');
+                notification.className = 'shield-notification';
+                notification.innerHTML = `🛡️ ${shieldPlayerName} 反彈給 ${attackPlayerName}！`;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transition = 'opacity 0.4s';
+                    setTimeout(() => notification.remove(), 400);
+                }, 800);
             }
 
             showTimeoutMessage() {
@@ -1659,7 +2141,7 @@
                     msgDiv.style.opacity = '0';
                     msgDiv.style.transition = 'opacity 0.4s';
                     setTimeout(() => msgDiv.remove(), 400);
-                }, 1700);
+                }, 1500);
             }
 
             showGameOverScreen(winner, reason) {
@@ -1680,10 +2162,10 @@
                     messageEl.innerHTML = `<span class="text-2xl text-secondary">${reason}</span>`;
                 }
                 
-                if (this.gameState) {
+                if (this.gameState && this.gameState.players) {
                     const rankings = [...this.gameState.players]
                         .filter(p => !p.isComputer)
-                        .sort((a, b) => (a.hand.length || 0) - (b.hand.length || 0));
+                        .sort((a, b) => (a.handCount || 0) - (b.handCount || 0));
                     
                     rankingsEl.innerHTML = '<h3 class="text-xl font-bold mb-4 text-center text-secondary">最終排名</h3>' +
                         rankings.map((player, index) => {
@@ -1740,19 +2222,25 @@
                 notification.textContent = '輪到你了！';
                 document.body.appendChild(notification);
                 
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                oscillator.frequency.value = 800;
-                oscillator.type = 'sine';
-                gainNode.gain.value = 0.1;
-                
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.1);
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.frequency.value = 800;
+                    oscillator.type = 'sine';
+                    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                    gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.01);
+                    gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.1);
+                    
+                    oscillator.start();
+                    oscillator.stop(audioContext.currentTime + 0.1);
+                } catch(e) {
+                    console.error("無法播放輪到你音效:", e);
+                }
                 
                 setTimeout(() => {
                     notification.style.animation = 'turnNotify 0.4s ease-in reverse';
@@ -1764,11 +2252,12 @@
                 const callout = document.getElementById('win-callout');
                 callout.textContent = isReason ? message : `${message} 獲勝！`;
                 callout.classList.remove('hidden');
-                setTimeout(() => callout.classList.add('hidden'), 3000);
+                setTimeout(() => callout.classList.add('hidden'), 2000);
             }
         }
 
         const game = new MultiplayerUnoGame();
+
     </script>
 </body>
 </html>
