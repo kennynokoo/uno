@@ -26,7 +26,14 @@ class GameRoom {
         this.turnTimer = null;
         this.turnTimerDuration = 15000;
         this.turnStartTime = null;
-        this.rematchVotes = new Set(); // 追蹤同意再來一局的玩家
+        this.rematchVotes = new Set();
+        this.gameRules = {
+            jumpIn: false,
+            shieldCards: false,
+            startingHandSize: 7
+        };
+        this.jumpInWindow = null;
+        this.jumpInTimeout = 3000;
     }
 
     addPlayer(socketId, playerName) {
@@ -52,7 +59,6 @@ class GameRoom {
         if (index !== -1) {
             const player = this.players[index];
             
-            // 清除該玩家的再來一局投票
             this.rematchVotes.delete(player.id);
             
             this.players.splice(index, 1);
@@ -64,6 +70,16 @@ class GameRoom {
             }
         }
         return false;
+    }
+
+    updateGameRules(rules) {
+        this.gameRules = { ...this.gameRules, ...rules };
+        
+        this.io.to(this.roomId).emit('roomUpdate', {
+            players: this.players,
+            canStart: this.canStart(),
+            gameRules: this.gameRules
+        });
     }
 
     getPlayerBySocketId(socketId) {
@@ -102,7 +118,9 @@ class GameRoom {
             turnStartTime: Date.now(),
             showedUno: [],
             playerHasDrawnThisTurn: false,
-            skipNextPlayer: false
+            skipNextPlayer: false,
+            gameRules: this.gameRules,
+            lastPlayTime: Date.now()
         };
 
         this.createDeck();
@@ -145,6 +163,12 @@ class GameRoom {
             this.gameState.deck.push({ color: 'black', value: 'wild', type: 'wild', display: 'W' });
             this.gameState.deck.push({ color: 'black', value: 'wildDrawFour', type: 'wildDrawFour', display: 'W+4' });
         }
+        
+        if (this.gameRules.shieldCards) {
+            for (let i = 0; i < 4; i++) {
+                this.gameState.deck.push({ color: 'white', value: 'shield', type: 'shield', display: '🛡️' });
+            }
+        }
     }
 
     shuffleDeck() {
@@ -156,9 +180,10 @@ class GameRoom {
     }
 
     dealCards() {
+        const cardsPerPlayer = this.gameRules.startingHandSize;
         this.gameState.players.forEach(player => {
             player.hand = [];
-            for (let i = 0; i < 7; i++) {
+            for (let i = 0; i < cardsPerPlayer; i++) {
                 player.hand.push(this.drawCardFromDeck());
             }
         });
@@ -180,7 +205,42 @@ class GameRoom {
         this.shuffleDeck();
     }
 
+    startJumpInWindow() {
+        if (!this.gameRules.jumpIn) return;
+        
+        this.clearJumpInWindow();
+        
+        this.jumpInWindow = setTimeout(() => {
+            this.clearJumpInWindow();
+        }, this.jumpInTimeout);
+    }
+
+    clearJumpInWindow() {
+        if (this.jumpInWindow) {
+            clearTimeout(this.jumpInWindow);
+            this.jumpInWindow = null;
+        }
+    }
+
+    canJumpIn(playerId, cardIndex) {
+        if (!this.gameRules.jumpIn || !this.jumpInWindow) return false;
+        
+        const player = this.gameState.players.find(p => p.id === playerId);
+        if (!player || cardIndex < 0 || cardIndex >= player.hand.length) return false;
+        
+        const card = player.hand[cardIndex];
+        const topCard = this.gameState.discardPile[this.gameState.discardPile.length - 1];
+        
+        return card.color === topCard.color && 
+               card.value === topCard.value && 
+               card.type === topCard.type;
+    }
+
     makeMove(playerId, move) {
+        if (move.type === 'jumpIn') {
+            return this.jumpIn(playerId, move.cardIndex);
+        }
+        
         const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
         
         if (currentPlayer.id !== playerId && !currentPlayer.isComputer) {
@@ -201,6 +261,58 @@ class GameRoom {
         }
     }
 
+    jumpIn(playerId, cardIndex) {
+        if (!this.canJumpIn(playerId, cardIndex)) {
+            return { success: false, error: '無法搶牌' };
+        }
+        
+        this.clearJumpInWindow();
+        this.clearTurnTimer();
+        
+        const player = this.gameState.players.find(p => p.id === playerId);
+        const card = player.hand[cardIndex];
+        
+        player.hand.splice(cardIndex, 1);
+        this.gameState.discardPile.push(card);
+        
+        const playerIndex = this.gameState.players.findIndex(p => p.id === playerId);
+        this.gameState.currentPlayerIndex = playerIndex;
+        
+        let newUnoPlayer = null;
+        if (player.hand.length === 1 && !this.gameState.showedUno.includes(player.id)) {
+            this.gameState.showedUno.push(player.id);
+            newUnoPlayer = player.id;
+        }
+        
+        if (player.hand.length === 0) {
+            this.gameState.isGameOver = true;
+            this.clearTurnTimer();
+            return { success: true, winner: player.name, jumpIn: true };
+        }
+
+        if (card.color === 'black') {
+            this.gameState.currentColorInPlay = null;
+            this.gameState.playerHasDrawnThisTurn = false;
+            return { 
+                success: true, 
+                jumpIn: true,
+                needColorSelection: true,
+                isWildDrawFour: card.type === 'wildDrawFour',
+                newUnoPlayer: newUnoPlayer
+            };
+        } else {
+            this.gameState.currentColorInPlay = card.color;
+            this.applyCardEffect(card);
+            this.nextTurn();
+            
+            return { 
+                success: true, 
+                jumpIn: true,
+                newUnoPlayer: newUnoPlayer
+            };
+        }
+    }
+
     playCard(playerId, cardIndex) {
         const player = this.gameState.players.find(p => p.id === playerId);
         if (!player || cardIndex < 0 || cardIndex >= player.hand.length) {
@@ -214,12 +326,39 @@ class GameRoom {
             return { success: false, error: '這張牌不能出' };
         }
 
-        // 出牌時清除計時器
         this.clearTurnTimer();
+
+        if (card.type === 'shield' && this.gameState.isStackActive) {
+            const previousPlayerIndex = this.getPreviousPlayerIndex();
+            const previousPlayer = this.gameState.players[previousPlayerIndex];
+            
+            for (let i = 0; i < this.gameState.stackPenalty; i++) {
+                previousPlayer.hand.push(this.drawCardFromDeck());
+            }
+            
+            player.hand.splice(cardIndex, 1);
+            this.gameState.discardPile.push(card);
+            this.gameState.isStackActive = false;
+            this.gameState.stackPenalty = 0;
+            this.gameState.stackType = null;
+            
+            this.nextTurn();
+            this.startJumpInWindow();
+            
+            return { 
+                success: true, 
+                shieldUsed: true,
+                shieldUserId: playerId,
+                attackerId: previousPlayer.id
+            };
+        }
 
         player.hand.splice(cardIndex, 1);
         this.gameState.discardPile.push(card);
-        this.gameState.currentColorInPlay = card.color === 'black' ? null : card.color;
+        
+        if (card.type !== 'shield') {
+            this.gameState.currentColorInPlay = card.color === 'black' ? null : card.color;
+        }
 
         let newUnoPlayer = null;
         if (player.hand.length === 1 && !this.gameState.showedUno.includes(player.id)) {
@@ -238,7 +377,6 @@ class GameRoom {
 
         this.applyCardEffect(card);
         
-        // 檢查是否出了skip卡
         let skippedPlayerId = null;
         if (card.type === 'skip' || (card.type === 'reverse' && this.gameState.players.length === 2)) {
             const nextIndex = this.getNextPlayerIndex();
@@ -247,12 +385,12 @@ class GameRoom {
         
         if (player.hand.length === 0) {
             this.gameState.isGameOver = true;
-            this.clearTurnTimer(); // 遊戲結束時清除計時器
+            this.clearTurnTimer();
             return { success: true, winner: player.name };
         }
 
-        // 總是調用 nextTurn，skip 的邏輯在 nextTurn 中處理
         this.nextTurn();
+        this.startJumpInWindow();
 
         return { 
             success: true, 
@@ -265,9 +403,14 @@ class GameRoom {
         const player = this.gameState.players.find(p => p.id === playerId);
         if (!player) return { success: false, error: '玩家不存在' };
 
-        // 檢查是否已經抽過牌（但懲罰抽牌除外）
         if (this.gameState.playerHasDrawnThisTurn && !this.gameState.isStackActive) {
             return { success: false, error: '本回合已經抽過牌' };
+        }
+
+        if (this.gameState.isStackActive && 
+            this.gameRules.shieldCards && 
+            player.hand.some(card => card.type === 'shield')) {
+            return { success: false, error: '你有神盾牌可以使用' };
         }
 
         if (this.gameState.isStackActive) {
@@ -277,7 +420,7 @@ class GameRoom {
             this.gameState.isStackActive = false;
             this.gameState.stackPenalty = 0;
             this.gameState.stackType = null;
-            this.gameState.playerHasDrawnThisTurn = true; // 懲罰抽牌也要標記
+            this.gameState.playerHasDrawnThisTurn = true;
             this.nextTurn();
             return { success: true, drewPenalty: true };
         }
@@ -293,7 +436,6 @@ class GameRoom {
             const elapsedTime = Date.now() - this.turnStartTime;
             const remainingTime = Math.max(0, this.turnTimerDuration - elapsedTime);
             
-            // 重新設置計時器為剩餘時間
             this.clearTurnTimer();
             if (remainingTime > 0) {
                 this.turnTimer = setTimeout(() => {
@@ -302,7 +444,6 @@ class GameRoom {
                     }
                 }, remainingTime);
             } else {
-                // 如果已經超時，立即處理
                 this.handleTurnTimeout();
                 return { success: true, timeout: true };
             }
@@ -330,14 +471,12 @@ class GameRoom {
             return { success: false, error: '無效的顏色' };
         }
 
-        // 選擇顏色時也要確保清除計時器
         this.clearTurnTimer();
         this.gameState.currentColorInPlay = color;
         
         const topCard = this.gameState.discardPile[this.gameState.discardPile.length - 1];
         this.applyCardEffect(topCard);
         
-        // 檢查是否是+4，如果是，下一個玩家會被跳過（因為要抽牌）
         let skippedPlayerId = null;
         if (topCard.type === 'wildDrawFour' && this.gameState.isStackActive) {
             const nextIndex = this.getNextPlayerIndex();
@@ -345,6 +484,7 @@ class GameRoom {
         }
         
         this.nextTurn();
+        this.startJumpInWindow();
 
         return { success: true, skippedPlayerId: skippedPlayerId };
     }
@@ -352,35 +492,34 @@ class GameRoom {
     isCardPlayable(card, topCard, handSize) {
         if (!topCard) return true;
         
-        if (handSize === 1 && card.type !== 'number') {
+        if (handSize === 1 && (card.type === 'drawTwo' || card.type === 'wildDrawFour' || card.type === 'skip' || card.type === 'reverse')) {
             return false;
         }
         
         if (this.gameState.isStackActive) {
             if (this.gameState.stackType === 'drawTwo' && card.type === 'drawTwo') return true;
             if (this.gameState.stackType === 'wildDrawFour' && card.type === 'wildDrawFour') return true;
+            if (this.gameRules.shieldCards && card.type === 'shield') return true;
             return false;
         }
         
-        if (card.color === 'black') return true;
-        if (this.gameState.currentColorInPlay) {
-            return card.color === this.gameState.currentColorInPlay || card.value === topCard.value;
-        }
-        return card.color === topCard.color || card.value === topCard.value;
+        if (card.color === 'black' || card.type === 'shield') return true;
+        
+        const effectiveColor = this.gameState.currentColorInPlay || topCard.color;
+        
+        return card.color === effectiveColor || card.value === topCard.value;
     }
 
     applyCardEffect(card) {
         switch (card.type) {
             case 'skip':
-                // Skip卡直接標記要跳過下一個玩家
                 this.gameState.skipNextPlayer = true;
                 break;
                 
             case 'reverse':
-                if (this.gameState.players.length === 4) {
+                if (this.gameState.players.length > 2) {
                     this.gameState.gameDirection *= -1;
                 } else {
-                    // 2人遊戲時，reverse相當於skip
                     this.gameState.skipNextPlayer = true;
                 }
                 break;
@@ -414,16 +553,21 @@ class GameRoom {
         return nextIndex;
     }
 
+    getPreviousPlayerIndex() {
+        let prevIndex = this.gameState.currentPlayerIndex - this.gameState.gameDirection;
+        if (prevIndex >= this.gameState.players.length) prevIndex = 0;
+        if (prevIndex < 0) prevIndex = this.gameState.players.length - 1;
+        return prevIndex;
+    }
+
     nextTurn() {
         this.gameState.showedUno = this.gameState.showedUno.filter(playerId => {
             const player = this.gameState.players.find(p => p.id === playerId);
             return player && player.hand.length === 1;
         });
 
-        // 移動到下一個玩家
         this.gameState.currentPlayerIndex = this.getNextPlayerIndex();
         
-        // 如果需要跳過玩家（skip卡或2人遊戲的reverse卡效果）
         if (this.gameState.skipNextPlayer) {
             this.gameState.currentPlayerIndex = this.getNextPlayerIndex();
             this.gameState.skipNextPlayer = false;
@@ -435,7 +579,7 @@ class GameRoom {
         
         const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
         if (currentPlayer.isComputer) {
-            const computerThinkTime = Math.random() * 2000 + 1000; // 隨機 1-3 秒
+            const computerThinkTime = Math.random() * 2000 + 2000;
             setTimeout(() => {
                 if (!this.gameState.isGameOver) {
                     this.computerTurn();
@@ -461,11 +605,9 @@ class GameRoom {
         const currentPlayerId = currentPlayer.id;
         
         if (!this.gameState.playerHasDrawnThisTurn) {
-            // 超時情況下強制抽牌
             const player = this.gameState.players.find(p => p.id === currentPlayerId);
             
             if (this.gameState.isStackActive) {
-                // 處理累積懲罰
                 for (let i = 0; i < this.gameState.stackPenalty; i++) {
                     player.hand.push(this.drawCardFromDeck());
                 }
@@ -473,16 +615,12 @@ class GameRoom {
                 this.gameState.stackPenalty = 0;
                 this.gameState.stackType = null;
             } else {
-                // 正常抽一張牌
                 player.hand.push(this.drawCardFromDeck());
             }
         }
-        // 如果玩家已經抽過牌（抽牌後可以出牌但沒出），也要結束回合
         
-        // 超時後立即結束回合
         this.nextTurn();
         
-        // 通知所有玩家超時結束回合
         this.players.forEach(player => {
             if (!player.isComputer && player.socketId) {
                 const playerGameState = this.getGameStateForPlayer(player.id);
@@ -508,6 +646,17 @@ class GameRoom {
 
         const topCard = this.gameState.discardPile[this.gameState.discardPile.length - 1];
         
+        if (this.gameState.isStackActive && this.gameRules.shieldCards) {
+            const shieldIndex = computer.hand.findIndex(card => card.type === 'shield');
+            if (shieldIndex !== -1 && Math.random() < 0.7) {
+                const result = this.playCard(computer.id, shieldIndex);
+                const move = { type: 'playCard', cardIndex: shieldIndex, playerId: computer.id };
+                
+                this.broadcastGameUpdate(move, result);
+                return;
+            }
+        }
+        
         let playableCardIndex = -1;
         for (let i = 0; i < computer.hand.length; i++) {
             if (this.isCardPlayable(computer.hand[i], topCard, computer.hand.length)) {
@@ -528,7 +677,7 @@ class GameRoom {
                 const colorCounts = { red: 0, yellow: 0, green: 0, blue: 0 };
                 
                 computer.hand.forEach(card => {
-                    if (card.color !== 'black') colorCounts[card.color]++;
+                    if (card.color !== 'black' && card.color !== 'white') colorCounts[card.color]++;
                 });
                 
                 let bestColor = colors[0];
@@ -541,7 +690,6 @@ class GameRoom {
                 }
                 
                 const colorResult = this.selectColor(computer.id, bestColor);
-                move = { type: 'selectColor', color: bestColor, playerId: computer.id };
                 result = { ...colorResult, newUnoPlayer: result.newUnoPlayer, skippedPlayerId: result.skippedPlayerId };
             }
         } else {
@@ -550,7 +698,7 @@ class GameRoom {
             
             if (!result.drewPenalty && result.canPlayDrawnCard) {
                 const playResult = this.playCard(computer.id, computer.hand.length - 1);
-                move = { type: 'playCard', cardIndex: computer.hand.length - 1, playerId: computer.id };
+                move = { type: 'playCard', cardIndex: computer.hand.length, playerId: computer.id };
                 result = playResult;
                 
                 if (playResult.needColorSelection) {
@@ -558,7 +706,7 @@ class GameRoom {
                     const colorCounts = { red: 0, yellow: 0, green: 0, blue: 0 };
                     
                     computer.hand.forEach(card => {
-                        if (card.color !== 'black') colorCounts[card.color]++;
+                        if (card.color !== 'black' && card.color !== 'white') colorCounts[card.color]++;
                     });
                     
                     let bestColor = colors[0];
@@ -571,12 +719,20 @@ class GameRoom {
                     }
                     
                     const colorResult = this.selectColor(computer.id, bestColor);
-                    move = { type: 'selectColor', color: bestColor, playerId: computer.id };
                     result = { ...colorResult, newUnoPlayer: playResult.newUnoPlayer, skippedPlayerId: playResult.skippedPlayerId };
                 }
             }
         }
 
+        this.broadcastGameUpdate(move, result);
+
+        if (result && result.winner) {
+            this.clearTurnTimer();
+            this.io.to(this.roomId).emit('gameOver', { winner: result.winner });
+        }
+    }
+
+    broadcastGameUpdate(move, result) {
         this.players.forEach(player => {
             if (!player.isComputer && player.socketId) {
                 const playerGameState = this.getGameStateForPlayer(player.id);
@@ -587,12 +743,6 @@ class GameRoom {
                 });
             }
         });
-
-        if (result && result.winner) {
-            // 清除計時器
-            this.clearTurnTimer();
-            this.io.to(this.roomId).emit('gameOver', { winner: result.winner });
-        }
     }
 
     requestRematch(playerId) {
@@ -605,14 +755,11 @@ class GameRoom {
             return { success: false, error: '玩家不存在' };
         }
 
-        // 添加投票
         this.rematchVotes.add(playerId);
 
-        // 檢查是否所有真人玩家都同意
         const humanPlayers = this.players.filter(p => !p.isComputer);
         const allVoted = humanPlayers.every(p => this.rematchVotes.has(p.id));
 
-        // 廣播當前投票狀態
         this.io.to(this.roomId).emit('rematchUpdate', {
             votes: Array.from(this.rematchVotes),
             totalPlayers: humanPlayers.length,
@@ -620,7 +767,6 @@ class GameRoom {
         });
 
         if (allVoted) {
-            // 所有人都同意，開始新遊戲
             this.resetForRematch();
             return { success: true, startingNewGame: true };
         }
@@ -629,29 +775,25 @@ class GameRoom {
     }
 
     resetForRematch() {
-        // 清除投票
         this.rematchVotes.clear();
-        
-        // 移除電腦玩家
         this.players = this.players.filter(p => !p.isComputer);
         
-        // 重置真人玩家的準備狀態
         this.players.forEach(player => {
             player.ready = false;
         });
         
-        // 重置遊戲狀態
         this.gameState = null;
         this.started = false;
         this.clearTurnTimer();
+        this.clearJumpInWindow();
         
-        // 通知所有玩家返回等待房間
         this.io.to(this.roomId).emit('returnToWaitingRoom', {
             players: this.players
         });
     }
 
     getGameStateForPlayer(playerId) {
+        if (!this.gameState) return null;
         const sanitizedPlayers = this.gameState.players.map(player => {
             if (player.id === playerId) {
                 return { ...player, hand: player.hand };
@@ -688,7 +830,8 @@ io.on('connection', (socket) => {
         socket.emit('roomCreated', { roomId, player });
         io.to(roomId).emit('roomUpdate', {
             players: room.players,
-            canStart: room.canStart()
+            canStart: room.canStart(),
+            gameRules: room.gameRules
         });
     });
 
@@ -713,11 +856,25 @@ io.on('connection', (socket) => {
         const player = room.addPlayer(socket.id, playerName);
         socket.join(roomId);
         
-        socket.emit('joinSuccess', { roomId, player });
+        socket.emit('joinSuccess', { roomId, player, gameRules: room.gameRules });
         io.to(roomId).emit('roomUpdate', {
             players: room.players,
-            canStart: room.canStart()
+            canStart: room.canStart(),
+            gameRules: room.gameRules
         });
+    });
+
+    socket.on('updateGameRules', (rules) => {
+        const playerInfo = playerSockets.get(socket.id);
+        if (!playerInfo) return;
+        
+        const room = rooms.get(playerInfo.roomId);
+        if (!room || room.started) return;
+        
+        const player = room.getPlayerBySocketId(socket.id);
+        if (player && room.players[0].id === player.id) {
+            room.updateGameRules(rules);
+        }
     });
 
     socket.on('playerReady', () => {
@@ -732,22 +889,25 @@ io.on('connection', (socket) => {
             player.ready = true;
             io.to(playerInfo.roomId).emit('roomUpdate', {
                 players: room.players,
-                canStart: room.canStart()
+                canStart: room.canStart(),
+                gameRules: room.gameRules
             });
             
             if (room.canStart()) {
                 const gameState = room.initializeGame();
                 
-                room.players.forEach(player => {
-                    const playerGameState = room.getGameStateForPlayer(player.id);
-                    io.to(player.socketId).emit('gameStart', {
-                        playerId: player.id,
-                        gameState: playerGameState
-                    });
+                room.players.forEach(p => {
+                    if (!p.isComputer) {
+                        const playerGameState = room.getGameStateForPlayer(p.id);
+                        io.to(p.socketId).emit('gameStart', {
+                            playerId: p.id,
+                            gameState: playerGameState
+                        });
+                    }
                 });
                 
                 if (gameState.players[0].isComputer) {
-                    const computerThinkTime = Math.random() * 2000 + 1000; // 隨機 1-3 秒
+                    const computerThinkTime = Math.random() * 2000 + 2000;
                     setTimeout(() => {
                         if (room.started && !room.gameState.isGameOver) {
                             room.computerTurn();
@@ -808,13 +968,12 @@ io.on('connection', (socket) => {
         if (playerInfo) {
             const room = rooms.get(playerInfo.roomId);
             if (room) {
-                // 如果遊戲已結束，更新再來一局的投票狀態
                 if (room.gameState && room.gameState.isGameOver && room.rematchVotes.has(playerInfo.playerId)) {
                     room.rematchVotes.delete(playerInfo.playerId);
                     const humanPlayers = room.players.filter(p => !p.isComputer);
                     io.to(playerInfo.roomId).emit('rematchUpdate', {
                         votes: Array.from(room.rematchVotes),
-                        totalPlayers: humanPlayers.length - 1, // 減去斷線的玩家
+                        totalPlayers: humanPlayers.length - 1,
                         allVoted: false
                     });
                 }
@@ -822,15 +981,19 @@ io.on('connection', (socket) => {
                 const roomDeleted = room.removePlayer(socket.id);
                 
                 if (!roomDeleted) {
-                    io.to(playerInfo.roomId).emit('playerDisconnected', {
-                        playerId: playerInfo.playerId
+                    io.to(playerInfo.roomId).emit('roomUpdate', {
+                       players: room.players,
+                       canStart: room.canStart(),
+                       gameRules: room.gameRules
                     });
-                    
+
                     if (room.started && (!room.gameState || !room.gameState.isGameOver)) {
+                        room.clearTurnTimer();
                         io.to(playerInfo.roomId).emit('gameOver', {
                             winner: null,
-                            reason: '玩家離開遊戲'
+                            reason: `${playerInfo.playerName || 'A player'} has left the game.`
                         });
+                        room.resetForRematch();
                     }
                 }
             }
