@@ -1117,6 +1117,7 @@
     <audio id="draw-four-sound" src="/draw-four.wav" preload="auto"></audio>
     <audio id="shield-sound" src="/Shield.mp3" preload="auto"></audio>
     <audio id="share-pain-sound" src="/share-pain.mp3" preload="auto"></audio>
+    <audio id="skip-sound" src="/skip.mp3" preload="auto"></audio>
     
     <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
         <button id="fullscreen-btn" class="p-3 rounded-full bg-slate-700/50 hover:bg-slate-600/70 transition-colors" title="全螢幕">
@@ -1393,6 +1394,7 @@
                 this.drawFourSound = document.getElementById('draw-four-sound');
                 this.shieldSound = document.getElementById('shield-sound');
                 this.sharePainSound = document.getElementById('share-pain-sound');
+                this.skipSound = document.getElementById('skip-sound');
                 
                 this.muteBtn = document.getElementById('mute-btn');
                 this.unmuteIcon = document.getElementById('unmute-icon');
@@ -1411,6 +1413,7 @@
                 if (this.drawFourSound) this.drawFourSound.volume = 0.9;
                 if (this.shieldSound) this.shieldSound.volume = 0.9;
                 if (this.sharePainSound) this.sharePainSound.volume = 0.9;
+                if (this.skipSound) this.skipSound.volume = 0.8;
 
                 this.setupSocketListeners();
                 this.setupUIListeners();
@@ -1485,7 +1488,8 @@
                         const startElement = document.getElementById(`player-${lastMove.playerId}`) || document.getElementById('my-player-area');
                         const endElement = document.getElementById('discard-pile');
                         
-                        if (topCard.type === 'drawTwo') { this.playSound(this.drawTwoSound); }
+                        if (topCard.type === 'skip') { this.playSound(this.skipSound); }
+                        else if (topCard.type === 'drawTwo') { this.playSound(this.drawTwoSound); }
                         else if (topCard.type === 'wildDrawFour') { this.playSound(this.drawFourSound); }
                         else if (topCard.type === 'sharePain') { this.playSound(this.sharePainSound); }
                         else if (topCard.type === 'shield') { this.playSound(this.shieldSound); }
