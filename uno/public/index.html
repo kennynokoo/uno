@@ -971,7 +971,6 @@
             }
         }
 
-        /* 同甘共苦牌相關樣式 */
         #player-selector-modal {
             position: fixed;
             top: 50%;
@@ -1196,7 +1195,7 @@
                         <div class="game-rule-toggle">
                             <div>
                                 <span class="font-semibold">神盾護體 (Shield Cards)</span>
-                                <p class="text-sm text-secondary">可反彈 +2、Skip、W+4 給出牌者</p>
+                                <p class="text-sm text-secondary">可反彈 +2、W+4 給出牌者</p>
                             </div>
                             <div id="shield-toggle" class="toggle-switch" data-rule="shieldCards"></div>
                         </div>
@@ -1381,6 +1380,10 @@
                 this.isAnimating = false;
                 this.selectedPlayerForSharePain = null;
                 this.pendingSharePainCard = null;
+                this.animationRetryCount = 0;
+                this.maxRetries = 5;
+                this.animationQueue = [];
+                this.isProcessingAnimations = false;
                 
                 this.bgm = document.getElementById('bgm');
                 this.playCardSound = document.getElementById('play-card-sound');
@@ -1415,10 +1418,261 @@
                 this.setupSharePainModal();
             }
 
+            addAnimationToQueue(animationFunction) {
+                this.animationQueue.push(animationFunction);
+                this.processAnimationQueue();
+            }
+
+            async processAnimationQueue() {
+                if (this.isProcessingAnimations || this.animationQueue.length === 0) {
+                    return;
+                }
+
+                this.isProcessingAnimations = true;
+
+                while (this.animationQueue.length > 0) {
+                    const animationFunction = this.animationQueue.shift();
+                    try {
+                        await animationFunction();
+                    } catch (error) {
+                        console.error('動畫執行錯誤:', error);
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                this.isProcessingAnimations = false;
+            }
+
+            async handleGameUpdate(gameState, lastMove, result) {
+                if (this.isAnimating) {
+                    if (this.animationRetryCount < this.maxRetries) {
+                        this.animationRetryCount++;
+                        setTimeout(() => {
+                            if (this.isAnimating) {
+                                console.warn(`動畫仍在進行中，重試次數: ${this.animationRetryCount}`);
+                                if (this.animationRetryCount >= this.maxRetries - 1) {
+                                    console.warn('強制重置動畫狀態');
+                                    this.isAnimating = false;
+                                    this.animationRetryCount = 0;
+                                }
+                            }
+                            this.handleGameUpdate(gameState, lastMove, result);
+                        }, 300);
+                    } else {
+                        console.error('動畫重試次數已達上限，強制處理遊戲更新');
+                        this.isAnimating = false;
+                        this.animationRetryCount = 0;
+                    }
+                    return;
+                }
+
+                this.animationRetryCount = 0;
+                this.isAnimating = true;
+
+                try {
+                    // 1. 首先處理出牌動畫
+                    const needsPlayAnimation = lastMove && (lastMove.type === 'playCard' || lastMove.type === 'jumpIn' || lastMove.type === 'playSharePainCard') && gameState.discardPile.length > 0;
+
+                    if (needsPlayAnimation) {
+                        const playerWhoPlayed = this.gameState.players.find(p => p.id === lastMove.playerId);
+                        if (playerWhoPlayed && lastMove.cardIndex < playerWhoPlayed.hand.length) {
+                            playerWhoPlayed.hand.splice(lastMove.cardIndex, 1);
+                        }
+                        this.renderMyHand();
+                        this.renderOtherPlayers();
+
+                        const topCard = gameState.discardPile[gameState.discardPile.length - 1];
+                        const startElement = document.getElementById(`player-${lastMove.playerId}`) || document.getElementById('my-player-area');
+                        const endElement = document.getElementById('discard-pile');
+                        
+                        if (topCard.type === 'drawTwo') { this.playSound(this.drawTwoSound); }
+                        else if (topCard.type === 'wildDrawFour') { this.playSound(this.drawFourSound); }
+                        else if (topCard.type === 'sharePain') { this.playSound(this.sharePainSound); }
+                        else if (topCard.type === 'shield') { this.playSound(this.shieldSound); }
+                        else { this.playSound(this.playCardSound); }
+                        
+                        await this.animateCardPlay(topCard, startElement, endElement);
+                    }
+
+                    // 2. 處理跳過和搶牌動畫（不涉及抽牌的特效）
+                    if (result && result.skippedPlayerId) {
+                        const skippedPlayer = this.gameState.players.find(p => p.id === result.skippedPlayerId);
+                        if (skippedPlayer) {
+                            await new Promise(resolve => {
+                                this.showSkipMessage(skippedPlayer.name);
+                                setTimeout(resolve, 1300);
+                            });
+                        }
+                    }
+                    
+                    if (result && result.jumpIn) {
+                        const jumpPlayer = this.gameState.players.find(p => p.id === lastMove.playerId);
+                        if (jumpPlayer) {
+                            await new Promise(resolve => {
+                                this.showJumpInNotification(jumpPlayer.name);
+                                setTimeout(resolve, 1300);
+                            });
+                        }
+                    }
+
+                    // 3. 處理神盾和同甘共苦的提示動畫（在抽牌之前）
+                    if (result && result.shieldUsed) {
+                        const shieldPlayer = this.gameState.players.find(p => p.id === result.shieldUserId);
+                        const attackPlayer = this.gameState.players.find(p => p.id === result.attackerId);
+                        if (shieldPlayer && attackPlayer) {
+                            await new Promise(resolve => {
+                                this.showShieldNotification(shieldPlayer.name, attackPlayer.name);
+                                setTimeout(resolve, 1800);
+                            });
+                        }
+                    }
+
+                    if (result && result.sharePainUsed) {
+                        const userPlayer = this.gameState.players.find(p => p.id === result.userId);
+                        const targetPlayer = this.gameState.players.find(p => p.id === result.targetId);
+                        if (userPlayer && targetPlayer) {
+                            await new Promise(resolve => {
+                                this.showSharePainNotification(userPlayer.name, targetPlayer.name);
+                                setTimeout(resolve, 2600);
+                            });
+                        }
+                    }
+
+                    if (result && result.sharePainTriggered) {
+                        await new Promise(resolve => {
+                            this.showSharePainActivation(result.triggerPlayer, result.affectedPlayers, result.penaltyCount);
+                            setTimeout(resolve, 3100);
+                        });
+                    }
+
+                    // 4. 處理抽牌動畫（在所有提示動畫之後）
+                    if (result && result.drawnCards && result.drawnCards.length > 0) {
+                        await this.animateDrawCards(result.drawnCards);
+                    }
+
+                    // 5. 更新遊戲狀態（在所有動畫完成後）
+                    const previousPlayerIndex = this.gameState ? this.gameState.currentPlayerIndex : -1;
+                    const previousPlayerId = this.gameState ? this.gameState.players[previousPlayerIndex]?.id : null;
+                    
+                    this.gameState = gameState;
+                    this.checkJumpInOpportunity();
+
+                    if (previousPlayerIndex !== gameState.currentPlayerIndex) {
+                        this.canPlayDrawnCard = false;
+                    }
+                    
+                    this.renderGameState();
+
+                    // 6. 處理UNO提示
+                    if (result.newUnoPlayer) {
+                        this.playSound(this.unoSound);
+                        const unoPlayer = this.gameState.players.find(p => p.id === result.newUnoPlayer);
+                        if (unoPlayer) {
+                            await new Promise(resolve => {
+                                this.showUnoCallout(unoPlayer.name);
+                                setTimeout(resolve, 900);
+                            });
+                        }
+                    }
+
+                    // 7. 處理顏色選擇（這會阻止繼續執行）
+                    if (result.needColorSelection && lastMove.playerId === this.myPlayerId) {
+                        this.showColorPicker();
+                        return;
+                    }
+
+                    // 8. 處理特殊情況和計時器邏輯（統一處理）
+                    let shouldStartTimer = true;
+                    let timerTime = 15;
+
+                    // 處理超時情況
+                    if (result && result.timeout && result.forceEndTurn) {
+                        this.canPlayDrawnCard = false;
+                        if (lastMove.playerId === this.myPlayerId || previousPlayerId === this.myPlayerId) {
+                            await new Promise(resolve => {
+                                this.showTimeoutMessage();
+                                setTimeout(resolve, 1900);
+                            });
+                        }
+                        shouldStartTimer = true; // 超時後需要開始新的計時器
+                    }
+                    else if (result && result.timeout && lastMove && lastMove.type === 'drawCard') {
+                        this.canPlayDrawnCard = false;
+                        if (lastMove.playerId === this.myPlayerId) {
+                            await new Promise(resolve => {
+                                this.showTimeoutMessage();
+                                setTimeout(resolve, 1900);
+                            });
+                        }
+                        shouldStartTimer = false; // 這種情況不需要重新開始計時器
+                    }
+                    // 處理主動抽牌的情況
+                    else if (lastMove && lastMove.type === 'drawCard' && lastMove.playerId === this.myPlayerId) {
+                        if (result.canPlayDrawnCard) {
+                            this.canPlayDrawnCard = true;
+                            timerTime = result.remainingTime || 15;
+                            shouldStartTimer = true;
+                        } else if (result.autoEndTurn || result.drewPenalty) {
+                            this.canPlayDrawnCard = false;
+                            shouldStartTimer = true;
+                        } else {
+                            shouldStartTimer = true;
+                        }
+                    }
+                    // 處理其他玩家抽牌的情況
+                    else if (lastMove && lastMove.type === 'drawCard' && lastMove.playerId !== this.myPlayerId) {
+                        if (result.autoEndTurn || result.drewPenalty) {
+                            shouldStartTimer = true;
+                        } else {
+                            shouldStartTimer = true;
+                        }
+                    }
+
+                    // 9. 統一的計時器處理邏輯
+                    if (!this.gameState.isGameOver && shouldStartTimer) {
+                        this.handleTimerAfterUpdate(timerTime);
+                    }
+
+                } finally {
+                    this.isAnimating = false;
+                }
+            }
+
+            // 新增：統一處理計時器的方法
+            handleTimerAfterUpdate(timerTime = 15) {
+                if (!this.gameState || this.gameState.isGameOver) return;
+                
+                const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
+                
+                console.log('=== 計時器處理 ===');
+                console.log('當前玩家:', currentPlayer.name);
+                console.log('是否電腦:', currentPlayer.isComputer);
+                console.log('是否我的回合:', currentPlayer.id === this.myPlayerId);
+                console.log('玩家索引:', this.gameState.currentPlayerIndex);
+                console.log('==================');
+                
+                if (currentPlayer.isComputer) {
+                    // 電腦玩家：只顯示思考狀態，不啟動計時器
+                    this.clearTurnTimer();
+                    document.getElementById('turn-timer-display').textContent = '電腦思考中...';
+                    document.getElementById('active-player-display').textContent = `${currentPlayer.name} 的回合`;
+                } else {
+                    // 真人玩家：啟動計時器
+                    this.startTurnTimer(timerTime);
+                }
+            }
+
             playSound(sound) {
                 if (sound && !this.isMuted) {
-                    sound.currentTime = 0;
-                    sound.play().catch(e => console.error("音效播放失敗:", e));
+                    try {
+                        sound.currentTime = 0;
+                        sound.play().catch(e => {
+                            // 靜默處理音效播放失敗，避免控制台錯誤干擾
+                            console.debug("音效播放失敗 (這是正常的，可能是音效文件不存在):", e.message);
+                        });
+                    } catch (e) {
+                        console.debug("音效初始化失敗:", e.message);
+                    }
                 }
             }
 
@@ -1473,6 +1727,8 @@
 
             setupSharePainModal() {
                 document.getElementById('confirm-share-pain').addEventListener('click', () => {
+                    if (this.isAnimating || this.isProcessingAnimations) return;
+                    
                     const confirmBtn = document.getElementById('confirm-share-pain');
                     if (confirmBtn.disabled) return;
                     
@@ -1527,7 +1783,6 @@
                         option.classList.add('selected');
                         this.selectedPlayerForSharePain = player.id;
                         
-                        // 啟用確認按鈕
                         const confirmBtn = document.getElementById('confirm-share-pain');
                         confirmBtn.disabled = false;
                         confirmBtn.style.opacity = '1';
@@ -1536,7 +1791,6 @@
                     listEl.appendChild(option);
                 });
                 
-                // 初始化時禁用確認按鈕
                 const confirmBtn = document.getElementById('confirm-share-pain');
                 confirmBtn.disabled = true;
                 confirmBtn.style.opacity = '0.5';
@@ -1549,7 +1803,6 @@
                 this.selectedPlayerForSharePain = null;
                 this.pendingSharePainCard = null;
                 
-                // 重置確認按鈕狀態
                 const confirmBtn = document.getElementById('confirm-share-pain');
                 confirmBtn.disabled = true;
                 confirmBtn.style.opacity = '0.5';
@@ -1586,150 +1839,29 @@
                 });
 
                 this.socket.on('gameStart', ({ playerId, gameState }) => {
+                    console.log('遊戲開始:', { playerId, currentPlayerIndex: gameState.currentPlayerIndex });
+                    
                     this.myPlayerId = playerId;
                     this.gameState = gameState;
                     this.canPlayDrawnCard = false;
                     this.showGameBoard();
                     this.renderGameState();
-                    this.startTurnTimer();
+                    
+                    // 使用統一的計時器處理方法
+                    this.handleTimerAfterUpdate();
                 });
 
                 this.socket.on('gameUpdate', async ({ gameState, lastMove, result }) => {
-                    if (this.isAnimating) {
-                        setTimeout(() => this.socket.listeners('gameUpdate')[0]({ gameState, lastMove, result }), 200);
-                        return;
-                    }
-
-                    const needsAnimation = lastMove && (lastMove.type === 'playCard' || lastMove.type === 'jumpIn' || lastMove.type === 'playSharePainCard') && gameState.discardPile.length > 0;
-
-                    if (needsAnimation) {
-                        this.isAnimating = true;
-
-                        const playerWhoPlayed = this.gameState.players.find(p => p.id === lastMove.playerId);
-                        if (playerWhoPlayed) {
-                            if (lastMove.cardIndex < playerWhoPlayed.hand.length) {
-                                playerWhoPlayed.hand.splice(lastMove.cardIndex, 1);
-                            }
-                        }
-                        this.renderMyHand();
-                        this.renderOtherPlayers();
-
-                        const topCard = gameState.discardPile[gameState.discardPile.length - 1];
-                        const startElement = document.getElementById(`player-${lastMove.playerId}`) || document.getElementById('my-player-area');
-                        const endElement = document.getElementById('discard-pile');
-                        
-                        if (topCard.type === 'drawTwo') { this.playSound(this.drawTwoSound); }
-                        else if (topCard.type === 'wildDrawFour') { this.playSound(this.drawFourSound); }
-                        else if (topCard.type === 'sharePain') { this.playSound(this.sharePainSound); }
-                        else { this.playSound(this.playCardSound); }
-                        
-                        await this.animateCardPlay(topCard, startElement, endElement);
-                    }
-
-                    const previousPlayerIndex = this.gameState ? this.gameState.currentPlayerIndex : -1;
-                    const previousPlayerId = this.gameState ? this.gameState.players[previousPlayerIndex]?.id : null;
-                    
-                    this.gameState = gameState;
-                    this.checkJumpInOpportunity();
-
-                    if (lastMove) {
-                        if (lastMove.type === 'drawCard') {
-                            this.playSound(this.drawCardSound);
-                        }
-                    }
-                    
-                    if (previousPlayerIndex !== gameState.currentPlayerIndex) {
-                        this.canPlayDrawnCard = false;
-                    }
-                    
-                    this.renderGameState();
-                    
-                    if (result && result.skippedPlayerId) {
-                        const skippedPlayer = this.gameState.players.find(p => p.id === result.skippedPlayerId);
-                        if (skippedPlayer) {
-                            setTimeout(() => this.showSkipMessage(skippedPlayer.name), 100);
-                        }
-                    }
-                    
-                    if (result && result.jumpIn) {
-                        const jumpPlayer = this.gameState.players.find(p => p.id === lastMove.playerId);
-                        if (jumpPlayer) {
-                            this.showJumpInNotification(jumpPlayer.name);
-                        }
-                    }
-                    
-                    if (result && result.shieldUsed) {
-                        const shieldPlayer = this.gameState.players.find(p => p.id === result.shieldUserId);
-                        const attackPlayer = this.gameState.players.find(p => p.id === result.attackerId);
-                        if (shieldPlayer && attackPlayer) {
-                            this.showShieldNotification(shieldPlayer.name, attackPlayer.name);
-                        }
-                    }
-
-                    if (result && result.sharePainUsed) {
-                        const userPlayer = this.gameState.players.find(p => p.id === result.userId);
-                        const targetPlayer = this.gameState.players.find(p => p.id === result.targetId);
-                        if (userPlayer && targetPlayer) {
-                            this.showSharePainNotification(userPlayer.name, targetPlayer.name);
-                        }
-                    }
-
-                    if (result && result.sharePainTriggered) {
-                        this.showSharePainActivation(result.triggerPlayer, result.affectedPlayers, result.penaltyCount);
-                    }
-                    
-                    if (result && result.timeout && result.forceEndTurn) {
-                        this.canPlayDrawnCard = false;
-                        if (lastMove.playerId === this.myPlayerId || previousPlayerId === this.myPlayerId) {
-                            this.showTimeoutMessage();
-                        }
-                        this.startTurnTimer();
-                        if (needsAnimation) this.isAnimating = false;
-                        return;
-                    }
-                    
-                    if (result && result.timeout && lastMove && lastMove.type === 'drawCard') {
-                        this.canPlayDrawnCard = false;
-                        if (lastMove.playerId === this.myPlayerId) {
-                            this.showTimeoutMessage();
-                        }
-                        if (needsAnimation) this.isAnimating = false;
-                        return;
-                    }
-                    
-                    if (lastMove && lastMove.type === 'drawCard' && lastMove.playerId === this.myPlayerId && result.canPlayDrawnCard) {
-                        this.canPlayDrawnCard = true;
-                        if (result.remainingTime !== undefined) {
-                            this.startTurnTimer(result.remainingTime);
-                        }
-                        if (needsAnimation) this.isAnimating = false;
-                        return;
-                    }
-                    
-                    if (result.needColorSelection && lastMove.playerId === this.myPlayerId) {
-                        this.showColorPicker();
-                        if (needsAnimation) this.isAnimating = false;
-                        return;
-                    }
-                    
-                    if (result.newUnoPlayer) {
-                        this.playSound(this.unoSound);
-                        const unoPlayer = this.gameState.players.find(p => p.id === result.newUnoPlayer);
-                        if (unoPlayer) {
-                            this.showUnoCallout(unoPlayer.name);
-                        }
-                    }
-                    
-                    this.startTurnTimer();
-                    if (needsAnimation) {
-                        this.isAnimating = false;
-                    }
+                    this.addAnimationToQueue(async () => {
+                        await this.handleGameUpdate(gameState, lastMove, result);
+                    });
                 });
 
                 this.socket.on('gameOver', ({ winner, reason }) => {
                     this.clearTurnTimer();
                     this.clearJumpInWindow();
                     this.isAnimating = false;
+                    this.animationRetryCount = 0;
                     
                     if (winner) {
                         this.showWinCallout(winner);
@@ -1764,10 +1896,14 @@
                     this.gameState = null;
                     this.canPlayDrawnCard = false;
                     this.clearJumpInWindow();
+                    this.isAnimating = false;
+                    this.animationRetryCount = 0;
                 });
 
                 this.socket.on('moveError', (error) => {
-                    console.error('移動錯誤:', error);
+                    console.warn('移動錯誤:', error);
+                    // 顯示友好的錯誤提示
+                    this.showError(error);
                 });
 
                 this.socket.on('playerDisconnected', ({ playerId }) => {
@@ -1804,6 +1940,8 @@
 
                 document.querySelectorAll('#color-picker-modal .color-button').forEach(btn => {
                     btn.addEventListener('click', (e) => {
+                        if (this.isAnimating || this.isProcessingAnimations) return;
+                        
                         const color = e.target.dataset.color;
                         this.clearTurnTimer();
                         this.socket.emit('gameMove', { type: 'selectColor', color });
@@ -1898,6 +2036,60 @@
                 }
             }
 
+            async animateDrawCards(drawnCards) {
+                for (const drawnCardInfo of drawnCards) {
+                    this.playSound(this.drawCardSound);
+                    
+                    const targetPlayer = this.gameState.players.find(p => p.id === drawnCardInfo.targetId);
+                    if (!targetPlayer) continue;
+                    
+                    const startElement = document.getElementById('draw-pile');
+                    const endElement = (drawnCardInfo.targetId === this.myPlayerId) 
+                        ? document.getElementById('my-player-area')
+                        : document.getElementById(`player-${drawnCardInfo.targetId}`);
+                    
+                    if (startElement && endElement) {
+                        await this.animateCardMovement({}, startElement, endElement);
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 150));
+                }
+            }
+
+            animateCardMovement(cardData, startElement, endElement) {
+                return new Promise(resolve => {
+                    if (!startElement || !endElement) {
+                        resolve();
+                        return;
+                    }
+
+                    const startRect = startElement.getBoundingClientRect();
+                    const endRect = endElement.getBoundingClientRect();
+
+                    const cardEl = this.renderCard(cardData, false, false);
+                    cardEl.style.position = 'fixed';
+                    cardEl.style.zIndex = '4000';
+                    cardEl.style.width = '85px';
+                    cardEl.style.height = '130px';
+                    cardEl.style.left = `${startRect.left + startRect.width / 2 - 42.5}px`;
+                    cardEl.style.top = `${startRect.top + startRect.height / 2 - 65}px`;
+                    cardEl.style.transition = 'all 0.4s ease-out';
+                    
+                    document.body.appendChild(cardEl);
+
+                    requestAnimationFrame(() => {
+                        cardEl.style.left = `${endRect.left + endRect.width / 2 - 42.5}px`;
+                        cardEl.style.top = `${endRect.top + endRect.height / 2 - 65}px`;
+                        cardEl.style.transform = 'scale(0.8)';
+                    });
+
+                    setTimeout(() => {
+                        cardEl.remove();
+                        resolve();
+                    }, 400);
+                });
+            }
+
             toggleFullscreen() {
                 if (!document.fullscreenElement) {
                     document.documentElement.requestFullscreen().catch(err => {
@@ -1986,18 +2178,28 @@
             startTurnTimer(initialTime = 15) {
                 this.clearTurnTimer();
                 
-                if (!this.gameState) return;
+                if (!this.gameState || this.gameState.isGameOver) return;
                 
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
                 const isMyTurn = currentPlayer.id === this.myPlayerId;
                 
-                if (isMyTurn && !currentPlayer.isComputer) {
-                    this.showTurnNotification();
-                }
+                console.log('啟動計時器:', {
+                    currentPlayer: currentPlayer.name,
+                    isComputer: currentPlayer.isComputer,
+                    isMyTurn: isMyTurn,
+                    initialTime: initialTime
+                });
                 
+                // 如果當前玩家是電腦，不應該啟動真人計時器
                 if (currentPlayer.isComputer) {
+                    console.warn('電腦玩家不應該啟動真人計時器！');
                     document.getElementById('turn-timer-display').textContent = '電腦思考中...';
                     return;
+                }
+                
+                // 修正：只有當輪到真人玩家且還沒顯示過通知時才顯示"輪到你了"
+                if (isMyTurn && !this.gameState.isGameOver && !this.canPlayDrawnCard) {
+                    this.showTurnNotification();
                 }
                 
                 let timeRemaining = initialTime;
@@ -2117,7 +2319,6 @@
                     const maxCardsToShow = 14;
                     const cardsToDisplay = Math.min(cardCount, maxCardsToShow);
                     
-                    // 檢查該玩家是否有綁定關係（檢查所有綁定，不只是與我的）
                     let isInSharePainBinding = false;
                     if (this.gameState.sharePainBindings) {
                         Object.values(this.gameState.sharePainBindings).forEach(binding => {
@@ -2127,7 +2328,6 @@
                         });
                     }
                     
-                    // 添加綁定圖案，但不添加外框樣式
                     const bindingIcon = isInSharePainBinding ? ' 🔗' : '';
                     
                     playerDiv.innerHTML = `
@@ -2147,7 +2347,6 @@
                 const myPlayer = this.gameState.players.find(p => p.id === this.myPlayerId);
                 if (!myPlayer) return;
 
-                // 檢查我是否有綁定關係（檢查所有綁定）
                 let hasSharePainPartner = false;
                 if (this.gameState.sharePainBindings) {
                     Object.values(this.gameState.sharePainBindings).forEach(binding => {
@@ -2229,10 +2428,24 @@
                 const cardBack = this.renderCard({}, false, false);
                 const isMyTurn = this.gameState.currentPlayerIndex === this.gameState.players.findIndex(p => p.id === this.myPlayerId);
                 
-                if (isMyTurn && !this.gameState.playerHasDrawnThisTurn) {
+                // 修正抽牌邏輯：允許在被罰牌時抽牌，即使有神盾牌也可以選擇不用
+                const canDrawCard = isMyTurn && (
+                    !this.gameState.playerHasDrawnThisTurn || 
+                    this.gameState.isStackActive  // 被罰牌時也可以抽牌
+                );
+                
+                if (canDrawCard) {
                     cardBack.classList.add('playable');
                     cardBack.addEventListener('click', () => {
                         if (this.isAnimating) return;
+                        
+                        console.log('抽牌被點擊，當前狀態:', {
+                            isMyTurn,
+                            hasDrawn: this.gameState.playerHasDrawnThisTurn,
+                            isStackActive: this.gameState.isStackActive,
+                            stackPenalty: this.gameState.stackPenalty
+                        });
+                        
                         this.clearTurnTimer();
                         this.socket.emit('gameMove', { type: 'drawCard' });
                     });
@@ -2246,7 +2459,16 @@
 
             updateGameInfo() {
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
-                document.getElementById('active-player-display').textContent = `${currentPlayer.name} 的回合`;
+                
+                // 確保顯示正確的當前玩家
+                const playerDisplayName = `${currentPlayer.name} 的回合`;
+                document.getElementById('active-player-display').textContent = playerDisplayName;
+                
+                console.log('更新遊戲信息:', {
+                    currentPlayer: currentPlayer.name,
+                    isComputer: currentPlayer.isComputer,
+                    currentPlayerIndex: this.gameState.currentPlayerIndex
+                });
                 
                 const stackEl = document.getElementById('stack-penalty-display');
                 if (this.gameState.isStackActive) {
@@ -2266,7 +2488,6 @@
             }
 
             updateSharePainStatus() {
-                // 簡化狀態顯示，主要顯示已經移到玩家名字旁邊
                 const statusEl = document.getElementById('share-pain-status');
                 statusEl.classList.add('hidden');
             }
@@ -2281,12 +2502,23 @@
                 myPlayerArea.classList.add('current-player');
 
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
-                const targetEl = (currentPlayer.id === this.myPlayerId) 
+                const isMyTurn = currentPlayer.id === this.myPlayerId;
+                
+                console.log('高亮當前玩家:', {
+                    currentPlayer: currentPlayer.name,
+                    isComputer: currentPlayer.isComputer,
+                    isMyTurn: isMyTurn,
+                    currentPlayerIndex: this.gameState.currentPlayerIndex
+                });
+                
+                const targetEl = isMyTurn 
                     ? myPlayerArea 
                     : document.getElementById(`player-${currentPlayer.id}`);
                 
                 if (targetEl) {
                      targetEl.classList.add('active-turn');
+                } else {
+                    console.warn('找不到目標元素:', `player-${currentPlayer.id}`);
                 }
             }
 
@@ -2359,7 +2591,9 @@
                      if (card.color !== drawnCard.color || card.value !== drawnCard.value) return false;
                 }
 
-                if (handSize === 1 && (card.type === 'drawTwo' || card.type === 'wildDrawFour' || card.type === 'skip' || card.type === 'reverse')) {
+                if (handSize === 1 && (card.type === 'drawTwo' || card.type === 'wildDrawFour' || 
+                    card.type === 'skip' || card.type === 'reverse' || card.type === 'shield' || 
+                    card.type === 'sharePain')) {
                     return false;
                 }
                 
@@ -2452,7 +2686,7 @@
             }
 
             showShieldNotification(shieldPlayerName, attackPlayerName) {
-                this.playSound(this.shieldSound);
+                // 移除重複的音效播放，因為在出牌時已經播放過了
                 const notification = document.createElement('div');
                 notification.className = 'shield-notification';
                 notification.innerHTML = `🛡️反彈！`;
