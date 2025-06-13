@@ -35,7 +35,7 @@ class GameRoom {
         };
         this.jumpInWindow = null;
         this.jumpInTimeout = 3000;
-        this.computerThinkTimer = null; // 新增：電腦思考計時器
+        this.computerThinkTimer = null; 
     }
 
     addPlayer(socketId, playerName) {
@@ -123,7 +123,8 @@ class GameRoom {
             skipNextPlayer: false,
             gameRules: this.gameRules,
             lastPlayTime: Date.now(),
-            sharePainBindings: {}
+            sharePainBindings: {},
+            waitingForColorSelection: false // **FIX**: Add state for waiting color
         };
 
         this.createDeck();
@@ -260,8 +261,12 @@ class GameRoom {
             return { success: false, error: '不是你的回合' };
         }
 
-        this.clearTurnTimer();
-        this.clearComputerThinkTimer(); // 新增：清除電腦思考計時器
+        // **FIX**: Don't clear timer if waiting for color selection. Timer is cleared before playing a wild card.
+        if (move.type !== 'selectColor') {
+            this.clearTurnTimer();
+            this.clearComputerThinkTimer();
+        }
+
 
         switch (move.type) {
             case 'playCard':
@@ -364,6 +369,7 @@ class GameRoom {
         }
 
         if (card.color === 'black') {
+            this.gameState.waitingForColorSelection = true; // **FIX**
             this.gameState.currentColorInPlay = null;
             this.gameState.playerHasDrawnThisTurn = false;
             return { 
@@ -398,9 +404,11 @@ class GameRoom {
         if (!this.isCardPlayable(card, topCard, player.hand.length)) {
             return { success: false, error: '這張牌不能出' };
         }
-
+        
+        // **FIX**: Clear timer before playing the card
         this.clearTurnTimer();
         this.clearComputerThinkTimer();
+
 
         if (card.type === 'shield' && this.gameState.isStackActive) {
             const previousPlayerIndex = this.getPreviousPlayerIndex();
@@ -444,6 +452,7 @@ class GameRoom {
         }
 
         if (card.color === 'black') {
+            this.gameState.waitingForColorSelection = true; // **FIX**
             return { 
                 success: true, 
                 needColorSelection: true,
@@ -484,14 +493,8 @@ class GameRoom {
         if (this.gameState.playerHasDrawnThisTurn && !this.gameState.isStackActive) {
             return { success: false, error: '本回合已經抽過牌' };
         }
-
-        // 移除強制使用神盾牌的限制，讓玩家可以選擇是否使用神盾牌
-        // 原來的邏輯：
-        // if (this.gameState.isStackActive && 
-        //     this.gameRules.shieldCards && 
-        //     player.hand.some(card => card.type === 'shield')) {
-        //     return { success: false, error: '你有神盾牌可以使用' };
-        // }
+        
+        this.clearTurnTimer(); // **FIX**: Clear timer when drawing a card
 
         if (this.gameState.isStackActive) {
             const penaltyResult = this.applyPenaltyCards(playerId, this.gameState.stackPenalty, 'stack');
@@ -541,7 +544,7 @@ class GameRoom {
                 drawnCard: drawnCard,
                 drawnCards: [{ card: drawnCard, targetId: playerId }],
                 canPlayDrawnCard: true,
-                remainingTime: Math.ceil(remainingTime / 1000)
+                remainingTime: Math.round(remainingTime / 1000) // **FIX**
             };
         } else {
             this.nextTurn();
@@ -625,7 +628,14 @@ class GameRoom {
         if (!validColors.includes(color)) {
             return { success: false, error: '無效的顏色' };
         }
+        
+        // **FIX**: Ensure it's the right player's turn to select a color
+        const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
+        if (playerId !== currentPlayer.id) {
+            return { success: false, error: '不是你的回合來選擇顏色' };
+        }
 
+        this.gameState.waitingForColorSelection = false; // **FIX**
         this.clearTurnTimer();
         this.clearComputerThinkTimer();
         this.gameState.currentColorInPlay = color;
@@ -713,10 +723,9 @@ class GameRoom {
         return prevIndex;
     }
 
-    // 修正：統一處理電腦思考邏輯
     scheduleComputerTurn() {
         this.clearComputerThinkTimer();
-        const computerThinkTime = Math.random() * 2000 + 2000; // 2-4秒隨機思考時間
+        const computerThinkTime = Math.random() * 2000 + 2000;
         console.log(`電腦思考時間: ${computerThinkTime}ms`);
         
         this.computerThinkTimer = setTimeout(() => {
@@ -746,16 +755,19 @@ class GameRoom {
             this.gameState.skipNextPlayer = false;
         }
         
-        this.gameState.turnStartTime = Date.now();
         this.gameState.playerHasDrawnThisTurn = false;
-        this.turnStartTime = Date.now();
         
-        const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
-        if (currentPlayer.isComputer) {
-            // 使用新的統一方法安排電腦思考
-            this.scheduleComputerTurn();
-        } else {
-            this.startTurnTimer();
+        // **FIX**: Only set turn start time and timer if not waiting for color
+        if (!this.gameState.waitingForColorSelection) {
+            this.gameState.turnStartTime = Date.now();
+            this.turnStartTime = Date.now();
+            
+            const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
+            if (currentPlayer.isComputer) {
+                this.scheduleComputerTurn();
+            } else {
+                this.startTurnTimer();
+            }
         }
     }
 
@@ -770,6 +782,7 @@ class GameRoom {
     }
 
     handleTurnTimeout() {
+        this.clearTurnTimer(); // **FIX**: Clear any existing timer first
         const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
         const currentPlayerId = currentPlayer.id;
         
@@ -786,25 +799,18 @@ class GameRoom {
             }
         }
         
+        // **FIX**: Ensure waiting for color is reset
+        this.gameState.waitingForColorSelection = false;
         this.nextTurn();
         
-        this.players.forEach(player => {
-            if (!player.isComputer && player.socketId) {
-                const playerGameState = this.getGameStateForPlayer(player.id);
-                this.io.to(player.socketId).emit('gameUpdate', {
-                    gameState: playerGameState,
-                    lastMove: { type: 'timeout', playerId: currentPlayerId },
-                    result: { 
-                        timeout: true, 
-                        forceEndTurn: true,
-                        drawnCards: penaltyResult.drawnCards,
-                        sharePainTriggered: penaltyResult.sharePainTriggered,
-                        triggerPlayer: penaltyResult.triggerPlayer,
-                        affectedPlayers: penaltyResult.affectedPlayers,
-                        penaltyCount: penaltyResult.penaltyCount
-                    }
-                });
-            }
+        this.broadcastGameUpdate({ type: 'timeout', playerId: currentPlayerId }, { 
+            timeout: true, 
+            forceEndTurn: true,
+            drawnCards: penaltyResult.drawnCards,
+            sharePainTriggered: penaltyResult.sharePainTriggered,
+            triggerPlayer: penaltyResult.triggerPlayer,
+            affectedPlayers: penaltyResult.affectedPlayers,
+            penaltyCount: penaltyResult.penaltyCount
         });
     }
 
@@ -816,13 +822,9 @@ class GameRoom {
     }
 
     computerTurn() {
+        if (this.gameState.waitingForColorSelection) return; // **FIX**: Computer waits for color selection too.
         const computer = this.gameState.players[this.gameState.currentPlayerIndex];
         if (!computer || !computer.isComputer || this.gameState.isGameOver) {
-            console.log('電腦回合無效:', { 
-                hasComputer: !!computer, 
-                isComputer: computer?.isComputer, 
-                isGameOver: this.gameState.isGameOver 
-            });
             return;
         }
 
@@ -1025,7 +1027,6 @@ class GameRoom {
         }
     }
 
-    // 修正：廣播遊戲更新後檢查電腦思考
     broadcastGameUpdate(move, result) {
         this.players.forEach(player => {
             if (!player.isComputer && player.socketId) {
@@ -1038,14 +1039,7 @@ class GameRoom {
             }
         });
         
-        // 檢查當前玩家是否為電腦，如果是則安排思考時間
-        const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
-        if (currentPlayer && currentPlayer.isComputer && !this.gameState.isGameOver) {
-            // 如果結果中沒有特殊處理（如需要選擇顏色），則安排電腦思考
-            if (!result.needColorSelection && !result.winner) {
-                this.scheduleComputerTurn();
-            }
-        }
+        // **FIX**: The check for the next computer turn is now handled within nextTurn() to be more reliable
     }
 
     requestRematch(playerId) {
@@ -1114,8 +1108,6 @@ class GameRoom {
             ...this.gameState,
             players: sanitizedPlayers,
             deckCount: this.gameState.deck.length,
-            playerHasDrawnThisTurn: this.gameState.playerHasDrawnThisTurn,
-            skipNextPlayer: this.gameState.skipNextPlayer
         };
     }
 }
@@ -1229,16 +1221,7 @@ io.on('connection', (socket) => {
         const result = room.makeMove(playerInfo.playerId, move);
         
         if (result.success) {
-            room.players.forEach(player => {
-                if (!player.isComputer) {
-                    const playerGameState = room.getGameStateForPlayer(player.id);
-                    io.to(player.socketId).emit('gameUpdate', {
-                        gameState: playerGameState,
-                        lastMove: { ...move, playerId: playerInfo.playerId },
-                        result: result
-                    });
-                }
-            });
+            room.broadcastGameUpdate({ ...move, playerId: playerInfo.playerId }, result);
             
             if (result.winner) {
                 io.to(playerInfo.roomId).emit('gameOver', {
