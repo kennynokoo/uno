@@ -1368,8 +1368,7 @@
                 this.gameState = null;
                 this.roomId = null;
                 this.canPlayDrawnCard = false;
-                this.turnTimer = null;
-                this.turnTimerInterval = null;
+                this.turnTimerInterval = null; 
                 this.gameRules = {
                     jumpIn: false,
                     shieldCards: false,
@@ -1556,7 +1555,6 @@
 
                     // 5. 更新遊戲狀態（在所有動畫完成後）
                     const previousPlayerIndex = this.gameState ? this.gameState.currentPlayerIndex : -1;
-                    const previousPlayerId = this.gameState ? this.gameState.players[previousPlayerIndex]?.id : null;
                     
                     this.gameState = gameState;
                     this.checkJumpInOpportunity();
@@ -1581,88 +1579,64 @@
 
                     // 7. 處理顏色選擇（這會阻止繼續執行）
                     if (result.needColorSelection && lastMove.playerId === this.myPlayerId) {
+                        this.isAnimating = false;
                         this.showColorPicker();
                         return;
                     }
-
-                    // 8. 處理特殊情況和計時器邏輯（統一處理）
+                    
+                    // 8. 處理計時器邏輯
                     let shouldStartTimer = true;
-                    let timerTime = 15;
+                    let specialRemainingTime = undefined;
 
                     // 處理超時情況
-                    if (result && result.timeout && result.forceEndTurn) {
+                    if (result && result.timeout) {
                         this.canPlayDrawnCard = false;
-                        if (lastMove.playerId === this.myPlayerId || previousPlayerId === this.myPlayerId) {
+                        const timedOutPlayerId = lastMove.playerId;
+                        const previousPlayer = this.gameState.players[previousPlayerIndex];
+                        if (timedOutPlayerId === this.myPlayerId || (previousPlayer && previousPlayer.id === this.myPlayerId)) {
                             await new Promise(resolve => {
                                 this.showTimeoutMessage();
                                 setTimeout(resolve, 1900);
                             });
                         }
-                        shouldStartTimer = true; // 超時後需要開始新的計時器
-                    }
-                    else if (result && result.timeout && lastMove && lastMove.type === 'drawCard') {
-                        this.canPlayDrawnCard = false;
-                        if (lastMove.playerId === this.myPlayerId) {
-                            await new Promise(resolve => {
-                                this.showTimeoutMessage();
-                                setTimeout(resolve, 1900);
-                            });
-                        }
-                        shouldStartTimer = false; // 這種情況不需要重新開始計時器
                     }
                     // 處理主動抽牌的情況
                     else if (lastMove && lastMove.type === 'drawCard' && lastMove.playerId === this.myPlayerId) {
                         if (result.canPlayDrawnCard) {
                             this.canPlayDrawnCard = true;
-                            timerTime = result.remainingTime || 15;
-                            shouldStartTimer = true;
-                        } else if (result.autoEndTurn || result.drewPenalty) {
-                            this.canPlayDrawnCard = false;
-                            shouldStartTimer = true;
-                        } else {
-                            shouldStartTimer = true;
-                        }
-                    }
-                    // 處理其他玩家抽牌的情況
-                    else if (lastMove && lastMove.type === 'drawCard' && lastMove.playerId !== this.myPlayerId) {
-                        if (result.autoEndTurn || result.drewPenalty) {
-                            shouldStartTimer = true;
-                        } else {
-                            shouldStartTimer = true;
+                            specialRemainingTime = result.remainingTime; 
                         }
                     }
 
                     // 9. 統一的計時器處理邏輯
                     if (!this.gameState.isGameOver && shouldStartTimer) {
-                        this.handleTimerAfterUpdate(timerTime);
+                        this.handleTimerAfterUpdate(specialRemainingTime);
                     }
 
                 } finally {
                     this.isAnimating = false;
                 }
             }
-
-            // 新增：統一處理計時器的方法
-            handleTimerAfterUpdate(timerTime = 15) {
+            
+            handleTimerAfterUpdate(specialRemainingTime) {
                 if (!this.gameState || this.gameState.isGameOver) return;
                 
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
                 
-                console.log('=== 計時器處理 ===');
-                console.log('當前玩家:', currentPlayer.name);
-                console.log('是否電腦:', currentPlayer.isComputer);
-                console.log('是否我的回合:', currentPlayer.id === this.myPlayerId);
-                console.log('玩家索引:', this.gameState.currentPlayerIndex);
-                console.log('==================');
-                
+                // **FIX**: If waiting for color, display a message instead of the timer
+                if (this.gameState.waitingForColorSelection) {
+                    this.clearTurnTimer();
+                    document.getElementById('turn-timer-display').textContent = '等待玩家選色...';
+                    document.getElementById('turn-timer-display').style.color = 'var(--accent-yellow)';
+                    return;
+                }
+
                 if (currentPlayer.isComputer) {
-                    // 電腦玩家：只顯示思考狀態，不啟動計時器
                     this.clearTurnTimer();
                     document.getElementById('turn-timer-display').textContent = '電腦思考中...';
-                    document.getElementById('active-player-display').textContent = `${currentPlayer.name} 的回合`;
+                    document.getElementById('turn-timer-display').style.color = '';
                 } else {
-                    // 真人玩家：啟動計時器
-                    this.startTurnTimer(timerTime);
+                    this.startTurnTimer(specialRemainingTime);
                 }
             }
 
@@ -1671,7 +1645,6 @@
                     try {
                         sound.currentTime = 0;
                         sound.play().catch(e => {
-                            // 靜默處理音效播放失敗，避免控制台錯誤干擾
                             console.debug("音效播放失敗 (這是正常的，可能是音效文件不存在):", e.message);
                         });
                     } catch (e) {
@@ -1851,7 +1824,6 @@
                     this.showGameBoard();
                     this.renderGameState();
                     
-                    // 使用統一的計時器處理方法
                     this.handleTimerAfterUpdate();
                 });
 
@@ -1906,7 +1878,6 @@
 
                 this.socket.on('moveError', (error) => {
                     console.warn('移動錯誤:', error);
-                    // 顯示友好的錯誤提示
                     this.showError(error);
                 });
 
@@ -1947,7 +1918,6 @@
                         if (this.isAnimating || this.isProcessingAnimations) return;
                         
                         const color = e.target.dataset.color;
-                        this.clearTurnTimer();
                         this.socket.emit('gameMove', { type: 'selectColor', color });
                         this.hideColorPicker();
                     });
@@ -2178,52 +2148,61 @@
                     document.getElementById('hand-size-increase').disabled = true;
                 }
             }
-
-            startTurnTimer(initialTime = 15) {
+            
+            startTurnTimer(initialSeconds) {
                 this.clearTurnTimer();
-                
+
                 if (!this.gameState || this.gameState.isGameOver) return;
-                
+
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
-                const isMyTurn = currentPlayer.id === this.myPlayerId;
-                
-                console.log('啟動計時器:', {
-                    currentPlayer: currentPlayer.name,
-                    isComputer: currentPlayer.isComputer,
-                    isMyTurn: isMyTurn,
-                    initialTime: initialTime
-                });
-                
-                // 如果當前玩家是電腦，不應該啟動真人計時器
-                if (currentPlayer.isComputer) {
-                    console.warn('電腦玩家不應該啟動真人計時器！');
+                if (!currentPlayer || currentPlayer.isComputer) {
                     document.getElementById('turn-timer-display').textContent = '電腦思考中...';
+                    document.getElementById('turn-timer-display').style.color = '';
                     return;
                 }
-                
-                // 修正：只有當輪到真人玩家且還沒顯示過通知時才顯示"輪到你了"
-                if (isMyTurn && !this.gameState.isGameOver && !this.canPlayDrawnCard) {
-                    this.showTurnNotification();
+
+                const isMyTurn = currentPlayer.id === this.myPlayerId;
+                const turnDuration = 15000;
+                let timeRemainingMs;
+
+                if (initialSeconds !== undefined) {
+                    timeRemainingMs = Math.min(initialSeconds * 1000, turnDuration);
+                } else {
+                    const turnStartTime = this.gameState.turnStartTime;
+                    if (!turnStartTime) {
+                        console.error('沒有從伺服器獲得回合開始時間！');
+                        document.getElementById('turn-timer-display').textContent = '計時錯誤';
+                        return;
+                    }
+                    const timeElapsed = Date.now() - turnStartTime;
+                    timeRemainingMs = turnDuration - timeElapsed;
                 }
                 
-                let timeRemaining = initialTime;
-                document.getElementById('turn-timer-display').textContent = `思考時間: ${timeRemaining}s`;
-                document.getElementById('turn-timer-display').style.color = '';
-                
-                this.turnTimerInterval = setInterval(() => {
-                    timeRemaining--;
-                    if (timeRemaining > 0) {
-                        document.getElementById('turn-timer-display').textContent = `思考時間: ${timeRemaining}s`;
-                        if (timeRemaining <= 3) {
-                            document.getElementById('turn-timer-display').style.color = 'var(--accent-red)';
-                        }
-                    } else if (timeRemaining === 0) {
-                        document.getElementById('turn-timer-display').textContent = '超時！';
+                if (isMyTurn && !this.canPlayDrawnCard) {
+                    this.showTurnNotification();
+                }
+
+                const updateTimerDisplay = () => {
+                    // **FIX**: Use Math.round() for more intuitive display and prevent early timeout appearance
+                    const secondsRemaining = Math.max(0, Math.round(timeRemainingMs / 1000));
+                    
+                    document.getElementById('turn-timer-display').textContent = `思考時間: ${secondsRemaining}s`;
+
+                    if (secondsRemaining <= 5) {
                         document.getElementById('turn-timer-display').style.color = 'var(--accent-red)';
                     } else {
-                        this.clearTurnTimer();
+                        document.getElementById('turn-timer-display').style.color = 'var(--accent-yellow)';
                     }
-                }, 900);
+                    
+                    if (timeRemainingMs < 0) {
+                        this.clearTurnTimer();
+                    } else {
+                         timeRemainingMs -= 1000;
+                    }
+                };
+                
+                updateTimerDisplay();
+                this.turnTimerInterval = setInterval(updateTimerDisplay, 1000);
             }
 
             clearTurnTimer() {
@@ -2432,10 +2411,9 @@
                 const cardBack = this.renderCard({}, false, false);
                 const isMyTurn = this.gameState.currentPlayerIndex === this.gameState.players.findIndex(p => p.id === this.myPlayerId);
                 
-                // 修正抽牌邏輯：允許在被罰牌時抽牌，即使有神盾牌也可以選擇不用
                 const canDrawCard = isMyTurn && (
                     !this.gameState.playerHasDrawnThisTurn || 
-                    this.gameState.isStackActive  // 被罰牌時也可以抽牌
+                    this.gameState.isStackActive
                 );
                 
                 if (canDrawCard) {
@@ -2464,15 +2442,8 @@
             updateGameInfo() {
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
                 
-                // 確保顯示正確的當前玩家
                 const playerDisplayName = `${currentPlayer.name} 的回合`;
                 document.getElementById('active-player-display').textContent = playerDisplayName;
-                
-                console.log('更新遊戲信息:', {
-                    currentPlayer: currentPlayer.name,
-                    isComputer: currentPlayer.isComputer,
-                    currentPlayerIndex: this.gameState.currentPlayerIndex
-                });
                 
                 const stackEl = document.getElementById('stack-penalty-display');
                 if (this.gameState.isStackActive) {
@@ -2507,13 +2478,6 @@
 
                 const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
                 const isMyTurn = currentPlayer.id === this.myPlayerId;
-                
-                console.log('高亮當前玩家:', {
-                    currentPlayer: currentPlayer.name,
-                    isComputer: currentPlayer.isComputer,
-                    isMyTurn: isMyTurn,
-                    currentPlayerIndex: this.gameState.currentPlayerIndex
-                });
                 
                 const targetEl = isMyTurn 
                     ? myPlayerArea 
@@ -2690,7 +2654,6 @@
             }
 
             showShieldNotification(shieldPlayerName, attackPlayerName) {
-                // 移除重複的音效播放，因為在出牌時已經播放過了
                 const notification = document.createElement('div');
                 notification.className = 'shield-notification';
                 notification.innerHTML = `🛡️反彈！`;
