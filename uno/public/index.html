@@ -1529,12 +1529,11 @@
                             else { this.playSound(this.playCardSound); }
                             
                             await this.animateCardPlay(topCard, startElement, endElement);
-                            // 出牌動畫結束後，更新棄牌堆的視覺
                             this.renderDiscardPile(); 
                         }
                     }
 
-                    // 動畫二：各種效果通知 (Skip, Shield 等)
+                    // 動畫二：各種效果通知
                     if (result) {
                         if (result.timeout) {
                             const timedOutPlayerId = lastMove.playerId;
@@ -1579,16 +1578,13 @@
                         this.renderDrawPile();
                     }
 
-                    // 步驟 4: 播放最終的通知 (UNO, 勝利等)
-                    // =================================================
+                    // 步驟 4 & 5: 最終通知與操作
                     if (result && result.newUnoPlayer) {
                         this.playSound(this.unoSound);
                         const unoPlayer = this.gameState.players.find(p => p.id === result.newUnoPlayer);
                         if (unoPlayer) await this.showUnoCallout(unoPlayer.name);
                     }
                     
-                    // 步驟 5: 執行最終操作 (如顯示顏色選擇器)
-                    // =================================================
                     if (result && result.needColorSelection && lastMove.playerId === this.myPlayerId) {
                         this.showColorPicker();
                     }
