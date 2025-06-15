@@ -2289,13 +2289,9 @@
                     });
                 }
 
-                // 暫時替換遊戲狀態進行渲染，同時保存canPlayDrawnCard標誌
+                // 暫時替換遊戲狀態進行渲染
                 const originalGameState = this.gameState;
-                const originalCanPlayDrawnCard = this.canPlayDrawnCard;
-                
                 this.gameState = tempGameState;
-                // 在使用臨時狀態時重置canPlayDrawnCard，防止錯誤高亮
-                this.canPlayDrawnCard = false;
 
                 this.renderOtherPlayers();
                 this.renderMyHand();
@@ -2306,9 +2302,8 @@
                 this.updateSharePainStatus();
                 this.handleTimerDisplay();
 
-                // 恢復原始的遊戲狀態和canPlayDrawnCard標誌
+                // 恢復原始的遊戲狀態
                 this.gameState = originalGameState;
-                this.canPlayDrawnCard = originalCanPlayDrawnCard;
             }
 
             renderOtherPlayers() {
@@ -2383,10 +2378,7 @@
                 
                 myPlayer.hand.forEach((card, index) => {
                     const isPlayableOnMyTurn = isMyTurn && this.isCardPlayable(card, topCard, myPlayer.hand.length);
-                    // 添加額外檢查：確保只有當前玩家且確實是最後一張抽取的卡牌才能被高亮
-                    const canPlayTheDrawnCard = this.canPlayDrawnCard && 
-                                               isMyTurn && 
-                                               index === myPlayer.hand.length - 1;
+                    const canPlayTheDrawnCard = this.canPlayDrawnCard && index === myPlayer.hand.length - 1;
                     
                     const canJumpIn = this.gameState.gameRules.jumpIn && 
                                      this.jumpInWindow &&
@@ -2585,10 +2577,16 @@
 
                  if (this.gameState.isActionPaused || this.gameState.waitingForColorSelection) return false;
 
+                // 只有當前玩家抽牌後才限制出牌選擇
                 if (this.gameState.playerHasDrawnThisTurn) {
+                     const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
                      const myPlayer = this.gameState.players.find(p => p.id === this.myPlayerId);
-                     const drawnCard = myPlayer.hand[myPlayer.hand.length - 1];
-                     if (card.color !== drawnCard.color || card.value !== drawnCard.value) return false;
+                     
+                     // 只有當前玩家才受抽牌限制
+                     if (currentPlayer && currentPlayer.id === this.myPlayerId) {
+                         const drawnCard = myPlayer.hand[myPlayer.hand.length - 1];
+                         if (card.color !== drawnCard.color || card.value !== drawnCard.value) return false;
+                     }
                 }
 
                 if (handSize === 1 && (card.type === 'drawTwo' || card.type === 'wildDrawFour' || 
