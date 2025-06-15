@@ -1565,6 +1565,11 @@
                         if (result.sharePainTriggered) {
                            await this.showSharePainActivation(result.triggerPlayer, result.affectedPlayers, result.penaltyCount);
                         }
+                        
+                        // 添加緩衝時間，確保所有動畫和提示框完整顯示
+                        if (result.skippedPlayerId || result.jumpIn || result.shieldUsed || result.sharePainUsed || result.sharePainTriggered) {
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                        }
                     }
 
                     // 動畫三：抽牌 (這是關鍵)
