@@ -17,28 +17,28 @@ const playerSockets = new Map();
 
 // Animation/Effect durations (in ms)
 const ANIMATION_DURATIONS = {
-    SHARE_PAIN_BIND: 2600,
-    SHARE_PAIN_TRIGGER: 3100,
+    SHARE_PAIN_BIND: 3000,
+    SHARE_PAIN_TRIGGER: 3000,
     DRAW_CARD: 500,
     DRAW_CARD_DELAY: 150, // 前端每張抽牌動畫之間的延遲
-    SKIP: 1300,
-    REVERSE: 1300,
+    SKIP: 2000,
+    REVERSE: 1400,
     TIMEOUT: 1900,
-    SHIELD: 2800, // 前端盾牌動畫實際需要2800ms
+    SHIELD: 3000, // 前端盾牌動畫實際需要2800ms
     BASIC_CARD: 800, // 增加基本卡片動畫時間，確保前端600ms動畫有足夠緩衝
-    JUMP_IN: 1300, // Jump-in動畫時間，匹配前端1300ms動畫
+    JUMP_IN: 1400, // Jump-in動畫時間，匹配前端1300ms動畫
     
     // 電腦玩家專用的較短動畫時間，保持流暢度
     COMPUTER: {
-        SHARE_PAIN_BIND: 1500,
-        SHARE_PAIN_TRIGGER: 2000,
-        DRAW_CARD: 400,
-        SKIP: 800,
-        REVERSE: 800,
+        SHARE_PAIN_BIND: 3000,
+        SHARE_PAIN_TRIGGER: 3000,
+        DRAW_CARD: 500,
+        SKIP: 2000,
+        REVERSE: 1400,
         TIMEOUT: 1200,
-        SHIELD: 2000, // 電腦也需要等待盾牌動畫
-        BASIC_CARD: 700, // 電腦也需要等待前端動畫完成
-        JUMP_IN: 1100 // 電腦Jump-in動畫時間，略短於人類玩家但足夠播放
+        SHIELD: 3000, // 電腦也需要等待盾牌動畫
+        BASIC_CARD: 800, // 電腦也需要等待前端動畫完成
+        JUMP_IN: 1400 // 電腦Jump-in動畫時間，略短於人類玩家但足夠播放
     }
 };
 
