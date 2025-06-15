@@ -15,6 +15,51 @@ app.use(express.static(path.join(__dirname, 'public')));
 const rooms = new Map();
 const playerSockets = new Map();
 
+// Animation/Effect durations (in ms)
+const ANIMATION_DURATIONS = {
+    SHARE_PAIN_BIND: 2600,
+    SHARE_PAIN_TRIGGER: 3100,
+    DRAW_CARD: 500,
+    DRAW_CARD_DELAY: 150, // 前端每張抽牌動畫之間的延遲
+    SKIP: 1300,
+    REVERSE: 1300,
+    TIMEOUT: 1900,
+    SHIELD: 2800, // 前端盾牌動畫實際需要2800ms
+    BASIC_CARD: 800, // 增加基本卡片動畫時間，確保前端600ms動畫有足夠緩衝
+    JUMP_IN: 800, // 增加Jump-in動畫時間
+    
+    // 電腦玩家專用的較短動畫時間，保持流暢度
+    COMPUTER: {
+        SHARE_PAIN_BIND: 1500,
+        SHARE_PAIN_TRIGGER: 2000,
+        DRAW_CARD: 400,
+        SKIP: 800,
+        REVERSE: 800,
+        TIMEOUT: 1200,
+        SHIELD: 2000, // 電腦也需要等待盾牌動畫
+        BASIC_CARD: 700, // 電腦也需要等待前端動畫完成
+        JUMP_IN: 700
+    }
+};
+
+// 計算抽牌動畫時間的輔助函數
+function calculateDrawAnimationTime(cardCount, isComputer = false) {
+    const durations = isComputer ? ANIMATION_DURATIONS.COMPUTER : ANIMATION_DURATIONS;
+    const baseTime = cardCount * (durations.DRAW_CARD + ANIMATION_DURATIONS.DRAW_CARD_DELAY);
+    
+    // 為大量抽牌添加額外緩衝時間
+    let bufferTime = 0;
+    if (cardCount >= 8) {
+        bufferTime = 1000; // 8張或以上額外1秒
+    } else if (cardCount >= 4) {
+        bufferTime = 500;  // 4-7張額外0.5秒
+    } else if (cardCount >= 2) {
+        bufferTime = 200;  // 2-3張額外0.2秒
+    }
+    
+    return baseTime + bufferTime;
+}
+
 class GameRoom {
     constructor(roomId, io) {
         this.roomId = roomId;
@@ -33,9 +78,12 @@ class GameRoom {
             sharePain: false,
             startingHandSize: 7
         };
+        this.computerThinkTimer = null;
+        this.actionInProgress = false;
+        
+        // Jump-In properties
         this.jumpInWindow = null;
         this.jumpInTimeout = 3000;
-        this.computerThinkTimer = null; 
     }
 
     addPlayer(socketId, playerName) {
@@ -124,7 +172,8 @@ class GameRoom {
             gameRules: this.gameRules,
             lastPlayTime: Date.now(),
             sharePainBindings: {},
-            waitingForColorSelection: false // **FIX**: Add state for waiting color
+            waitingForColorSelection: false,
+            isActionPaused: false 
         };
 
         this.createDeck();
@@ -216,10 +265,8 @@ class GameRoom {
     }
 
     startJumpInWindow() {
-        if (!this.gameRules.jumpIn) return;
-        
+        if (!this.gameRules || !this.gameRules.jumpIn) return;
         this.clearJumpInWindow();
-        
         this.jumpInWindow = setTimeout(() => {
             this.clearJumpInWindow();
         }, this.jumpInTimeout);
@@ -233,40 +280,87 @@ class GameRoom {
     }
 
     canJumpIn(playerId, cardIndex) {
-        if (!this.gameRules.jumpIn || !this.jumpInWindow) return false;
-        
+        if (!this.gameRules.jumpIn || this.gameState.isActionPaused || !this.jumpInWindow) return false;
         const player = this.gameState.players.find(p => p.id === playerId);
         if (!player || cardIndex < 0 || cardIndex >= player.hand.length) return false;
-        
         const card = player.hand[cardIndex];
         const topCard = this.gameState.discardPile[this.gameState.discardPile.length - 1];
-        
+        if (!topCard) return false;
         return card.color === topCard.color && 
                card.value === topCard.value && 
                card.type === topCard.type;
     }
+    
+    pauseAndResume(duration, move, result, playerId = null) {
+        if (this.actionInProgress) return;
+
+        this.actionInProgress = true;
+        this.clearTurnTimer();
+        this.clearComputerThinkTimer();
+        this.clearJumpInWindow();
+        
+        this.gameState.isActionPaused = true;
+        this.broadcastGameUpdate(move, result);
+
+        // 使用與動畫類型匹配的持續時間，確保前端動畫完成
+        let actualDuration = duration;
+        
+        // 對於電腦玩家，使用預設的電腦專用時間，不再進一步縮減
+        if (playerId) {
+            const player = this.gameState.players.find(p => p.id === playerId);
+            if (player && player.isComputer) {
+                // 電腦玩家已經有專用的較短動畫時間，不需要額外縮減
+                actualDuration = duration;
+            }
+        }
+
+        setTimeout(() => {
+            // 檢查遊戲狀態是否仍然存在（避免遊戲結束後的回調執行）
+            if (!this.gameState) {
+                this.actionInProgress = false;
+                return;
+            }
+            
+            this.gameState.isActionPaused = false;
+            
+            // 如果在等待選色，不要進入下一回合
+            if (!this.gameState.waitingForColorSelection) {
+                this.nextTurn();
+                
+                // 延遲開啟Jump-in窗口，確保動畫完成後才能搶牌
+                setTimeout(() => {
+                    if (this.gameState) { // 再次檢查狀態
+                        this.startJumpInWindow();
+                    }
+                }, 200);
+            }
+            
+            this.broadcastGameUpdate({}, {});
+            this.actionInProgress = false;
+        }, actualDuration);
+    }
 
     makeMove(playerId, move) {
-        if (move.type === 'jumpIn') {
-            return this.jumpIn(playerId, move.cardIndex);
+        const player = this.gameState.players.find(p => p.id === playerId);
+        const isComputerPlayer = player && player.isComputer;
+        
+        // 改進的動畫狀態檢查：只對人類玩家在非Jump-in情況下檢查
+        if (!isComputerPlayer && this.actionInProgress && move.type !== 'jumpIn') {
+            return { success: false, error: '正在處理動畫，請稍候' };
         }
 
-        if (move.type === 'playSharePainCard') {
-            return this.playSharePainCard(playerId, move.cardIndex, move.targetPlayerId);
-        }
-        
         const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
         
-        if (currentPlayer.id !== playerId && !currentPlayer.isComputer) {
-            return { success: false, error: '不是你的回合' };
+        if (move.type !== 'selectColor' && currentPlayer.id !== playerId) {
+             if (move.type === 'jumpIn' && this.canJumpIn(playerId, move.cardIndex)) {
+                // Allow jump-in
+             } else {
+                return { success: false, error: '不是你的回合' };
+             }
         }
-
-        // **FIX**: Don't clear timer if waiting for color selection. Timer is cleared before playing a wild card.
-        if (move.type !== 'selectColor') {
-            this.clearTurnTimer();
-            this.clearComputerThinkTimer();
-        }
-
+        
+        this.clearTurnTimer();
+        this.clearComputerThinkTimer();
 
         switch (move.type) {
             case 'playCard':
@@ -275,6 +369,10 @@ class GameRoom {
                 return this.drawCard(playerId);
             case 'selectColor':
                 return this.selectColor(playerId, move.color);
+            case 'jumpIn':
+                return this.jumpIn(playerId, move.cardIndex);
+            case 'playSharePainCard':
+                return this.playSharePainCard(playerId, move.cardIndex, move.targetPlayerId);
             default:
                 return { success: false, error: '無效的操作' };
         }
@@ -301,7 +399,7 @@ class GameRoom {
         if (!this.isCardPlayable(card, topCard, player.hand.length)) {
             return { success: false, error: '這張牌不能出' };
         }
-
+        
         player.hand.splice(cardIndex, 1);
         this.gameState.discardPile.push(card);
 
@@ -320,21 +418,23 @@ class GameRoom {
 
         if (player.hand.length === 0) {
             this.gameState.isGameOver = true;
-            this.clearTurnTimer();
-            this.clearComputerThinkTimer();
             return { success: true, winner: player.name };
         }
-
-        this.nextTurn();
-        this.startJumpInWindow();
-
-        return { 
+        
+        const result = { 
             success: true, 
             sharePainUsed: true,
             userId: playerId,
             targetId: targetPlayerId,
             newUnoPlayer: newUnoPlayer
         };
+        const move = { type: 'playSharePainCard', cardIndex, playerId, targetPlayerId };
+
+        // 統一使用動畫系統，確保所有玩家操作的一致性
+        const isComputer = this.gameState.players.find(p => p.id === playerId)?.isComputer;
+        const durations = isComputer ? ANIMATION_DURATIONS.COMPUTER : ANIMATION_DURATIONS;
+        this.pauseAndResume(durations.SHARE_PAIN_BIND, move, result, playerId);
+        return { success: true, needsServerContinuation: true };
     }
 
     jumpIn(playerId, cardIndex) {
@@ -343,8 +443,6 @@ class GameRoom {
         }
         
         this.clearJumpInWindow();
-        this.clearTurnTimer();
-        this.clearComputerThinkTimer();
         
         const player = this.gameState.players.find(p => p.id === playerId);
         const card = player.hand[cardIndex];
@@ -363,13 +461,11 @@ class GameRoom {
         
         if (player.hand.length === 0) {
             this.gameState.isGameOver = true;
-            this.clearTurnTimer();
-            this.clearComputerThinkTimer();
             return { success: true, winner: player.name, jumpIn: true };
         }
 
         if (card.color === 'black') {
-            this.gameState.waitingForColorSelection = true; // **FIX**
+            this.gameState.waitingForColorSelection = true; 
             this.gameState.currentColorInPlay = null;
             this.gameState.playerHasDrawnThisTurn = false;
             return { 
@@ -382,13 +478,19 @@ class GameRoom {
         } else {
             this.gameState.currentColorInPlay = card.color;
             this.applyCardEffect(card);
-            this.nextTurn();
             
-            return { 
+            const result = { 
                 success: true, 
                 jumpIn: true,
                 newUnoPlayer: newUnoPlayer
             };
+            const move = { type: 'jumpIn', cardIndex, playerId };
+            
+            // 為Jump-in也使用動畫系統
+            const isComputer = this.gameState.players.find(p => p.id === playerId)?.isComputer;
+            const durations = isComputer ? ANIMATION_DURATIONS.COMPUTER : ANIMATION_DURATIONS;
+            this.pauseAndResume(durations.JUMP_IN, move, result, playerId);
+            return { success: true, needsServerContinuation: true };
         }
     }
 
@@ -405,11 +507,6 @@ class GameRoom {
             return { success: false, error: '這張牌不能出' };
         }
         
-        // **FIX**: Clear timer before playing the card
-        this.clearTurnTimer();
-        this.clearComputerThinkTimer();
-
-
         if (card.type === 'shield' && this.gameState.isStackActive) {
             const previousPlayerIndex = this.getPreviousPlayerIndex();
             const previousPlayer = this.gameState.players[previousPlayerIndex];
@@ -422,20 +519,25 @@ class GameRoom {
             this.gameState.stackPenalty = 0;
             this.gameState.stackType = null;
             
-            this.nextTurn();
-            this.startJumpInWindow();
-            
-            return { 
+            const result = { 
                 success: true, 
                 shieldUsed: true,
                 shieldUserId: playerId,
                 attackerId: previousPlayer.id,
-                sharePainTriggered: penaltyResult.sharePainTriggered,
-                triggerPlayer: penaltyResult.triggerPlayer,
-                affectedPlayers: penaltyResult.affectedPlayers,
-                penaltyCount: penaltyResult.penaltyCount,
-                drawnCards: penaltyResult.drawnCards
+                ...penaltyResult
             };
+            const move = {type: 'playCard', cardIndex, playerId};
+            const isComputer = player && player.isComputer;
+            const durations = isComputer ? ANIMATION_DURATIONS.COMPUTER : ANIMATION_DURATIONS;
+            const drawAnimationTime = calculateDrawAnimationTime(penaltyResult.drawnCards.length, isComputer);
+            
+            // 如果觸發了同甘共苦，需要額外的動畫時間
+            let totalDuration = durations.SHIELD + drawAnimationTime;
+            if (penaltyResult.sharePainTriggered) {
+                totalDuration += durations.SHARE_PAIN_TRIGGER;
+            }
+            this.pauseAndResume(totalDuration, move, result, playerId);
+            return { success: true, needsServerContinuation: true };
         }
 
         player.hand.splice(cardIndex, 1);
@@ -452,13 +554,23 @@ class GameRoom {
         }
 
         if (card.color === 'black') {
-            this.gameState.waitingForColorSelection = true; // **FIX**
-            return { 
+            this.gameState.waitingForColorSelection = true;
+            
+            const result = { 
                 success: true, 
                 needColorSelection: true,
                 isWildDrawFour: card.type === 'wildDrawFour',
                 newUnoPlayer: newUnoPlayer
             };
+            const move = {type: 'playCard', cardIndex, playerId};
+
+            // 即使是需要選色的卡片，也要先執行動畫
+            const isComputer = player && player.isComputer;
+            const durations = isComputer ? ANIMATION_DURATIONS.COMPUTER : ANIMATION_DURATIONS;
+            const animationDuration = durations.BASIC_CARD;
+            
+            this.pauseAndResume(animationDuration, move, result, playerId);
+            return { success: true, needsServerContinuation: true, needColorSelection: true };
         }
 
         this.applyCardEffect(card);
@@ -471,19 +583,29 @@ class GameRoom {
         
         if (player.hand.length === 0) {
             this.gameState.isGameOver = true;
-            this.clearTurnTimer();
-            this.clearComputerThinkTimer();
             return { success: true, winner: player.name };
         }
 
-        this.nextTurn();
-        this.startJumpInWindow();
-
-        return { 
+        const result = { 
             success: true, 
             newUnoPlayer: newUnoPlayer,
             skippedPlayerId: skippedPlayerId
         };
+        const move = {type: 'playCard', cardIndex, playerId};
+
+        // 統一使用動畫系統，確保所有玩家操作的一致性
+        const isComputer = player && player.isComputer;
+        const durations = isComputer ? ANIMATION_DURATIONS.COMPUTER : ANIMATION_DURATIONS;
+        
+        let animationDuration;
+        if (card.type === 'skip' || (card.type === 'reverse' && this.gameState.players.length === 2)) {
+            animationDuration = durations.SKIP;
+        } else {
+            animationDuration = durations.BASIC_CARD;
+        }
+        
+        this.pauseAndResume(animationDuration, move, result, playerId);
+        return { success: true, needsServerContinuation: true };
     }
 
     drawCard(playerId) {
@@ -494,8 +616,6 @@ class GameRoom {
             return { success: false, error: '本回合已經抽過牌' };
         }
         
-        this.clearTurnTimer(); // **FIX**: Clear timer when drawing a card
-
         if (this.gameState.isStackActive) {
             const penaltyResult = this.applyPenaltyCards(playerId, this.gameState.stackPenalty, 'stack');
             
@@ -503,17 +623,29 @@ class GameRoom {
             this.gameState.stackPenalty = 0;
             this.gameState.stackType = null;
             this.gameState.playerHasDrawnThisTurn = true;
-            this.nextTurn();
             
-            return { 
+            const result = { 
                 success: true, 
                 drewPenalty: true,
-                sharePainTriggered: penaltyResult.sharePainTriggered,
-                triggerPlayer: penaltyResult.triggerPlayer,
-                affectedPlayers: penaltyResult.affectedPlayers,
-                penaltyCount: penaltyResult.penaltyCount,
-                drawnCards: penaltyResult.drawnCards
+                ...penaltyResult
             };
+            const move = {type: 'drawCard', playerId};
+
+            // 統一使用動畫系統處理懲罰抽牌
+            const isComputer = player && player.isComputer;
+            const durations = isComputer ? ANIMATION_DURATIONS.COMPUTER : ANIMATION_DURATIONS;
+            
+            let baseDuration = 500;
+            const drawAnimationTime = calculateDrawAnimationTime(penaltyResult.drawnCards.length, isComputer);
+            let totalDuration = baseDuration + drawAnimationTime;
+            
+            // 如果觸發了同甘共苦，需要額外的動畫時間
+            if (penaltyResult.sharePainTriggered) {
+                totalDuration += durations.SHARE_PAIN_TRIGGER;
+            }
+
+            this.pauseAndResume(totalDuration, move, result, playerId);
+            return { success: true, needsServerContinuation: true };
         }
 
         const drawnCard = this.drawCardFromDeck();
@@ -527,10 +659,9 @@ class GameRoom {
             const elapsedTime = Date.now() - this.turnStartTime;
             const remainingTime = Math.max(0, this.turnTimerDuration - elapsedTime);
             
-            this.clearTurnTimer();
             if (remainingTime > 0) {
                 this.turnTimer = setTimeout(() => {
-                    if (!this.gameState.isGameOver) {
+                    if (this.gameState && !this.gameState.isGameOver) {
                         this.handleTurnTimeout();
                     }
                 }, remainingTime);
@@ -544,17 +675,23 @@ class GameRoom {
                 drawnCard: drawnCard,
                 drawnCards: [{ card: drawnCard, targetId: playerId }],
                 canPlayDrawnCard: true,
-                remainingTime: Math.round(remainingTime / 1000) // **FIX**
+                remainingTime: Math.floor(remainingTime / 1000)
             };
         } else {
-            this.nextTurn();
-            return { 
+             const result = { 
                 success: true, 
                 drawnCard: drawnCard,
                 drawnCards: [{ card: drawnCard, targetId: playerId }],
                 canPlayDrawnCard: false,
                 autoEndTurn: true
             };
+            const move = {type: 'drawCard', playerId};
+
+            // 統一使用動畫系統處理普通抽牌
+            const isComputer = player && player.isComputer;
+            const durations = isComputer ? ANIMATION_DURATIONS.COMPUTER : ANIMATION_DURATIONS;
+            this.pauseAndResume(durations.DRAW_CARD, move, result, playerId);
+            return { success: true, needsServerContinuation: true };
         }
     }
 
@@ -568,6 +705,7 @@ class GameRoom {
         let partnerPlayer = null;
         let drawnCards = [];
 
+        // Share Pain only triggers on attacks ('stack' or 'shield'), not personal penalties like 'timeout'
         if (this.gameRules.sharePain && (reason === 'stack' || reason === 'shield')) {
             let binding = null;
             
@@ -629,29 +767,32 @@ class GameRoom {
             return { success: false, error: '無效的顏色' };
         }
         
-        // **FIX**: Ensure it's the right player's turn to select a color
         const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
         if (playerId !== currentPlayer.id) {
             return { success: false, error: '不是你的回合來選擇顏色' };
         }
 
-        this.gameState.waitingForColorSelection = false; // **FIX**
-        this.clearTurnTimer();
-        this.clearComputerThinkTimer();
+        this.gameState.waitingForColorSelection = false; 
         this.gameState.currentColorInPlay = color;
         
         const topCard = this.gameState.discardPile[this.gameState.discardPile.length - 1];
         this.applyCardEffect(topCard);
         
-        this.nextTurn();
-        this.startJumpInWindow();
-
-        return { success: true };
+        const result = { success: true };
+        const move = { type: 'selectColor', color, playerId };
+        
+        // 統一使用動畫系統處理顏色選擇
+        const isComputer = this.gameState.players.find(p => p.id === playerId)?.isComputer;
+        const durations = isComputer ? ANIMATION_DURATIONS.COMPUTER : ANIMATION_DURATIONS;
+        this.pauseAndResume(durations.BASIC_CARD, move, result, playerId);
+        return { success: true, needsServerContinuation: true };
     }
 
     isCardPlayable(card, topCard, handSize) {
         if (!topCard) return true;
         
+        if (this.gameState.isActionPaused || this.gameState.waitingForColorSelection) return false;
+
         if (handSize === 1 && (card.type === 'drawTwo' || card.type === 'wildDrawFour' || 
             card.type === 'skip' || card.type === 'reverse' || card.type === 'shield' || 
             card.type === 'sharePain')) {
@@ -726,10 +867,9 @@ class GameRoom {
     scheduleComputerTurn() {
         this.clearComputerThinkTimer();
         const computerThinkTime = Math.random() * 2000 + 2000;
-        console.log(`電腦思考時間: ${computerThinkTime}ms`);
         
         this.computerThinkTimer = setTimeout(() => {
-            if (!this.gameState.isGameOver) {
+            if (this.gameState && !this.gameState.isGameOver) {
                 this.computerTurn();
             }
         }, computerThinkTime);
@@ -743,6 +883,8 @@ class GameRoom {
     }
 
     nextTurn() {
+        if (!this.gameState) return; // 防止遊戲結束後調用
+        
         this.gameState.showedUno = this.gameState.showedUno.filter(playerId => {
             const player = this.gameState.players.find(p => p.id === playerId);
             return player && player.hand.length === 1;
@@ -757,7 +899,6 @@ class GameRoom {
         
         this.gameState.playerHasDrawnThisTurn = false;
         
-        // **FIX**: Only set turn start time and timer if not waiting for color
         if (!this.gameState.waitingForColorSelection) {
             this.gameState.turnStartTime = Date.now();
             this.turnStartTime = Date.now();
@@ -775,14 +916,16 @@ class GameRoom {
         this.clearTurnTimer();
         
         this.turnTimer = setTimeout(() => {
-            if (this.gameState.isGameOver) return;
+            if (!this.gameState || this.gameState.isGameOver) return;
             
             this.handleTurnTimeout();
         }, this.turnTimerDuration);
     }
 
     handleTurnTimeout() {
-        this.clearTurnTimer(); // **FIX**: Clear any existing timer first
+        this.clearTurnTimer();
+        if (!this.gameState) return; // 防止遊戲結束後調用
+        
         const currentPlayer = this.gameState.players[this.gameState.currentPlayerIndex];
         const currentPlayerId = currentPlayer.id;
         
@@ -799,19 +942,28 @@ class GameRoom {
             }
         }
         
-        // **FIX**: Ensure waiting for color is reset
-        this.gameState.waitingForColorSelection = false;
-        this.nextTurn();
-        
-        this.broadcastGameUpdate({ type: 'timeout', playerId: currentPlayerId }, { 
+        const result = { 
             timeout: true, 
             forceEndTurn: true,
-            drawnCards: penaltyResult.drawnCards,
-            sharePainTriggered: penaltyResult.sharePainTriggered,
-            triggerPlayer: penaltyResult.triggerPlayer,
-            affectedPlayers: penaltyResult.affectedPlayers,
-            penaltyCount: penaltyResult.penaltyCount
-        });
+            ...penaltyResult
+        };
+        const move = { type: 'timeout', playerId: currentPlayerId };
+
+        this.gameState.waitingForColorSelection = false;
+        
+        const isComputer = currentPlayer && currentPlayer.isComputer;
+        const durations = isComputer ? ANIMATION_DURATIONS.COMPUTER : ANIMATION_DURATIONS;
+        
+        let baseDuration = durations.TIMEOUT;
+        const drawAnimationTime = calculateDrawAnimationTime(penaltyResult.drawnCards.length, isComputer);
+        let totalDuration = baseDuration + drawAnimationTime;
+        
+        // 如果觸發了同甘共苦，需要額外的動畫時間
+        if (penaltyResult.sharePainTriggered) {
+            totalDuration += durations.SHARE_PAIN_TRIGGER;
+        }
+
+        this.pauseAndResume(totalDuration, move, result, currentPlayerId);
     }
 
     clearTurnTimer() {
@@ -822,7 +974,8 @@ class GameRoom {
     }
 
     computerTurn() {
-        if (this.gameState.waitingForColorSelection) return; // **FIX**: Computer waits for color selection too.
+        if (!this.gameState) return; // 防止遊戲結束後調用
+        if (this.gameState.waitingForColorSelection) return;
         const computer = this.gameState.players[this.gameState.currentPlayerIndex];
         if (!computer || !computer.isComputer || this.gameState.isGameOver) {
             return;
@@ -854,9 +1007,7 @@ class GameRoom {
                 
                 if (shouldUseShield) {
                     const result = this.playCard(computer.id, shieldIndex);
-                    const move = { type: 'playCard', cardIndex: shieldIndex, playerId: computer.id };
-                    
-                    this.broadcastGameUpdate(move, result);
+                    // 由於統一使用動畫系統，所有操作都會返回 needsServerContinuation
                     return;
                 }
             }
@@ -909,9 +1060,14 @@ class GameRoom {
                 move = { type: 'playCard', cardIndex: playableCardIndex, playerId: computer.id };
             }
             
+            // 如果需要選色，設置延遲選色邏輯，但不阻止動畫系統
             if (result && result.needColorSelection) {
                 const colorThinkTime = Math.random() * 1000 + 1000;
+                
                 setTimeout(() => {
+                    // 確保遊戲狀態仍然存在且在等待選色
+                    if (!this.gameState || !this.gameState.waitingForColorSelection) return;
+                    
                     const colors = ['red', 'yellow', 'green', 'blue'];
                     const colorCounts = { red: 0, yellow: 0, green: 0, blue: 0 };
                     
@@ -928,32 +1084,31 @@ class GameRoom {
                         }
                     }
                     
-                    const colorResult = this.selectColor(computer.id, bestColor);
-                    const finalResult = { ...colorResult, newUnoPlayer: result.newUnoPlayer, skippedPlayerId: result.skippedPlayerId };
+                    console.log(`Computer selecting color: ${bestColor}`);
+                    this.selectColor(computer.id, bestColor);
                     
-                    this.broadcastGameUpdate(move, finalResult);
-                    
-                    if (finalResult && finalResult.winner) {
+                    // 檢查遊戲是否結束
+                    if (result && result.winner) {
                         this.clearTurnTimer();
                         this.clearComputerThinkTimer();
-                        this.io.to(this.roomId).emit('gameOver', { winner: finalResult.winner });
+                        this.io.to(this.roomId).emit('gameOver', { winner: result.winner });
                     }
-                }, colorThinkTime);
-                return;
+                }, colorThinkTime + 1000); // 減少延遲時間
             }
         } else {
             result = this.drawCard(computer.id);
             move = { type: 'drawCard', playerId: computer.id };
             
-            if (!result.drewPenalty && result.canPlayDrawnCard) {
+            if (result && result.success && !result.drewPenalty && result.canPlayDrawnCard) {
                 const secondThinkTime = Math.random() * 1500 + 1500;
                 setTimeout(() => {
+                    if (!this.gameState) return; // 防止遊戲結束後調用
+                    
                     const drawnCardIndex = computer.hand.length - 1;
                     const drawnCard = computer.hand[drawnCardIndex];
-                    let secondMove;
                     let playResult;
                     
-                    if (drawnCard.type === 'sharePain' && this.gameRules.sharePain) {
+                    if (drawnCard.type === 'sharePain' && this.gameRules && this.gameRules.sharePain) {
                         const availableTargets = this.gameState.players.filter(p => p.id !== computer.id);
                         if (availableTargets.length > 0) {
                             const selectedTarget = availableTargets.reduce((max, player) => 
@@ -961,19 +1116,21 @@ class GameRoom {
                             );
                             
                             playResult = this.playSharePainCard(computer.id, drawnCardIndex, selectedTarget.id);
-                            secondMove = { type: 'playSharePainCard', cardIndex: drawnCardIndex, playerId: computer.id, targetPlayerId: selectedTarget.id };
                         } else {
-                            this.broadcastGameUpdate(move, result);
                             return;
                         }
                     } else {
                         playResult = this.playCard(computer.id, drawnCardIndex);
-                        secondMove = { type: 'playCard', cardIndex: drawnCardIndex, playerId: computer.id };
                     }
                     
-                    if (playResult.needColorSelection) {
+                    // 如果需要選色，設置延遲選色邏輯，但不阻止動畫系統
+                    if (playResult && playResult.needColorSelection) {
                         const colorThinkTime = Math.random() * 1000 + 1000;
+                        
                         setTimeout(() => {
+                            // 確保遊戲狀態仍然存在且在等待選色
+                            if (!this.gameState || !this.gameState.waitingForColorSelection) return;
+                            
                             const colors = ['red', 'yellow', 'green', 'blue'];
                             const colorCounts = { red: 0, yellow: 0, green: 0, blue: 0 };
                             
@@ -990,40 +1147,33 @@ class GameRoom {
                                 }
                             }
                             
-                            const colorResult = this.selectColor(computer.id, bestColor);
-                            const finalResult = { ...colorResult, newUnoPlayer: playResult.newUnoPlayer, skippedPlayerId: playResult.skippedPlayerId };
+                            console.log(`Computer selecting color after draw: ${bestColor}`);
+                            this.selectColor(computer.id, bestColor);
                             
-                            this.broadcastGameUpdate(secondMove, finalResult);
-                            
-                            if (finalResult && finalResult.winner) {
+                            // 檢查遊戲是否結束
+                            if (playResult && playResult.winner) {
                                 this.clearTurnTimer();
                                 this.clearComputerThinkTimer();
-                                this.io.to(this.roomId).emit('gameOver', { winner: finalResult.winner });
+                                this.io.to(this.roomId).emit('gameOver', { winner: playResult.winner });
                             }
-                        }, colorThinkTime);
-                        return;
-                    } else {
-                        this.broadcastGameUpdate(secondMove, playResult);
-                        
-                        if (playResult && playResult.winner) {
-                            this.clearTurnTimer();
-                            this.clearComputerThinkTimer();
-                            this.io.to(this.roomId).emit('gameOver', { winner: playResult.winner });
-                        }
+                        }, colorThinkTime + 1000); // 減少延遲時間
+                    }
+                    
+                    if (playResult && playResult.winner) {
+                        this.clearTurnTimer();
+                        this.clearComputerThinkTimer();
+                        this.io.to(this.roomId).emit('gameOver', { winner: playResult.winner });
                     }
                 }, secondThinkTime);
                 return;
             }
         }
 
-        if (result) {
-            this.broadcastGameUpdate(move, result);
-
-            if (result.winner) {
-                this.clearTurnTimer();
-                this.clearComputerThinkTimer();
-                this.io.to(this.roomId).emit('gameOver', { winner: result.winner });
-            }
+        // 統一使用動畫系統後，所有操作都由 pauseAndResume 處理
+        if (result && result.winner) {
+            this.clearTurnTimer();
+            this.clearComputerThinkTimer();
+            this.io.to(this.roomId).emit('gameOver', { winner: result.winner });
         }
     }
 
@@ -1038,8 +1188,6 @@ class GameRoom {
                 });
             }
         });
-        
-        // **FIX**: The check for the next computer turn is now handled within nextTurn() to be more reliable
     }
 
     requestRematch(playerId) {
@@ -1220,15 +1368,17 @@ io.on('connection', (socket) => {
         
         const result = room.makeMove(playerInfo.playerId, move);
         
-        if (result.success) {
-            room.broadcastGameUpdate({ ...move, playerId: playerInfo.playerId }, result);
+        if (result && result.success) {
+            if (!result.needsServerContinuation) {
+                room.broadcastGameUpdate({ ...move, playerId: playerInfo.playerId }, result);
+            }
             
             if (result.winner) {
                 io.to(playerInfo.roomId).emit('gameOver', {
                     winner: result.winner
                 });
             }
-        } else {
+        } else if (result && result.error) {
             socket.emit('moveError', result.error);
         }
     });
