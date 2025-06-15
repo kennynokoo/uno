@@ -2289,9 +2289,13 @@
                     });
                 }
 
-                // 暫時替換遊戲狀態進行渲染
+                // 暫時替換遊戲狀態進行渲染，同時保存canPlayDrawnCard標誌
                 const originalGameState = this.gameState;
+                const originalCanPlayDrawnCard = this.canPlayDrawnCard;
+                
                 this.gameState = tempGameState;
+                // 在使用臨時狀態時重置canPlayDrawnCard，防止錯誤高亮
+                this.canPlayDrawnCard = false;
 
                 this.renderOtherPlayers();
                 this.renderMyHand();
@@ -2302,8 +2306,9 @@
                 this.updateSharePainStatus();
                 this.handleTimerDisplay();
 
-                // 恢復原始的遊戲狀態
+                // 恢復原始的遊戲狀態和canPlayDrawnCard標誌
                 this.gameState = originalGameState;
+                this.canPlayDrawnCard = originalCanPlayDrawnCard;
             }
 
             renderOtherPlayers() {
@@ -2378,7 +2383,10 @@
                 
                 myPlayer.hand.forEach((card, index) => {
                     const isPlayableOnMyTurn = isMyTurn && this.isCardPlayable(card, topCard, myPlayer.hand.length);
-                    const canPlayTheDrawnCard = this.canPlayDrawnCard && index === myPlayer.hand.length - 1;
+                    // 添加額外檢查：確保只有當前玩家且確實是最後一張抽取的卡牌才能被高亮
+                    const canPlayTheDrawnCard = this.canPlayDrawnCard && 
+                                               isMyTurn && 
+                                               index === myPlayer.hand.length - 1;
                     
                     const canJumpIn = this.gameState.gameRules.jumpIn && 
                                      this.jumpInWindow &&
