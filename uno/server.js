@@ -323,6 +323,16 @@ class GameRoom {
             
             this.gameState.isActionPaused = false;
             
+            // 檢查是否有勝利者（動畫完成後才檢查）
+            if (result && result.winner && this.gameState.isGameOver) {
+                this.clearTurnTimer();
+                this.clearComputerThinkTimer();
+                this.clearJumpInWindow();
+                this.io.to(this.roomId).emit('gameOver', { winner: result.winner });
+                this.actionInProgress = false;
+                return;
+            }
+            
             // 如果在等待選色，不要進入下一回合
             if (!this.gameState.waitingForColorSelection) {
                 this.nextTurn();
@@ -416,11 +426,6 @@ class GameRoom {
             newUnoPlayer = player.id;
         }
 
-        if (player.hand.length === 0) {
-            this.gameState.isGameOver = true;
-            return { success: true, winner: player.name };
-        }
-        
         const result = { 
             success: true, 
             sharePainUsed: true,
@@ -428,6 +433,12 @@ class GameRoom {
             targetId: targetPlayerId,
             newUnoPlayer: newUnoPlayer
         };
+        
+        // 檢查是否勝利，但不立即返回
+        if (player.hand.length === 0) {
+            this.gameState.isGameOver = true;
+            result.winner = player.name;
+        }
         const move = { type: 'playSharePainCard', cardIndex, playerId, targetPlayerId };
 
         // 統一使用動畫系統，確保所有玩家操作的一致性
@@ -459,22 +470,31 @@ class GameRoom {
             newUnoPlayer = player.id;
         }
         
-        if (player.hand.length === 0) {
+        // 勝利檢查將在動畫系統中處理，這裡先不返回
+        const hasWon = player.hand.length === 0;
+        if (hasWon) {
             this.gameState.isGameOver = true;
-            return { success: true, winner: player.name, jumpIn: true };
         }
 
         if (card.color === 'black') {
             this.gameState.waitingForColorSelection = true; 
             this.gameState.currentColorInPlay = null;
             this.gameState.playerHasDrawnThisTurn = false;
-            return { 
+            
+            const result = { 
                 success: true, 
                 jumpIn: true,
                 needColorSelection: true,
                 isWildDrawFour: card.type === 'wildDrawFour',
                 newUnoPlayer: newUnoPlayer
             };
+            
+            // 如果勝利，添加勝利資訊到結果中
+            if (hasWon) {
+                result.winner = player.name;
+            }
+            
+            return result;
         } else {
             this.gameState.currentColorInPlay = card.color;
             this.applyCardEffect(card);
@@ -484,6 +504,11 @@ class GameRoom {
                 jumpIn: true,
                 newUnoPlayer: newUnoPlayer
             };
+            
+            // 如果勝利，添加勝利資訊到結果中
+            if (hasWon) {
+                result.winner = player.name;
+            }
             const move = { type: 'jumpIn', cardIndex, playerId };
             
             // 為Jump-in也使用動畫系統
@@ -581,16 +606,18 @@ class GameRoom {
             skippedPlayerId = this.gameState.players[nextIndex].id;
         }
         
-        if (player.hand.length === 0) {
-            this.gameState.isGameOver = true;
-            return { success: true, winner: player.name };
-        }
-
         const result = { 
             success: true, 
             newUnoPlayer: newUnoPlayer,
             skippedPlayerId: skippedPlayerId
         };
+        
+        // 檢查是否勝利，但不立即返回
+        if (player.hand.length === 0) {
+            this.gameState.isGameOver = true;
+            result.winner = player.name;
+        }
+        
         const move = {type: 'playCard', cardIndex, playerId};
 
         // 統一使用動畫系統，確保所有玩家操作的一致性
@@ -779,6 +806,15 @@ class GameRoom {
         this.applyCardEffect(topCard);
         
         const result = { success: true };
+        
+        // 檢查選色後是否有勝利者
+        if (this.gameState.isGameOver) {
+            const winner = this.gameState.players.find(p => p.hand.length === 0);
+            if (winner) {
+                result.winner = winner.name;
+            }
+        }
+        
         const move = { type: 'selectColor', color, playerId };
         
         // 統一使用動畫系統處理顏色選擇
@@ -1087,12 +1123,7 @@ class GameRoom {
                     console.log(`Computer selecting color: ${bestColor}`);
                     this.selectColor(computer.id, bestColor);
                     
-                    // 檢查遊戲是否結束
-                    if (result && result.winner) {
-                        this.clearTurnTimer();
-                        this.clearComputerThinkTimer();
-                        this.io.to(this.roomId).emit('gameOver', { winner: result.winner });
-                    }
+                    // 勝利檢查已經在動畫系統中處理
                 }, colorThinkTime + 1000); // 減少延遲時間
             }
         } else {
@@ -1150,31 +1181,18 @@ class GameRoom {
                             console.log(`Computer selecting color after draw: ${bestColor}`);
                             this.selectColor(computer.id, bestColor);
                             
-                            // 檢查遊戲是否結束
-                            if (playResult && playResult.winner) {
-                                this.clearTurnTimer();
-                                this.clearComputerThinkTimer();
-                                this.io.to(this.roomId).emit('gameOver', { winner: playResult.winner });
-                            }
+                            // 勝利檢查已經在動畫系統中處理
                         }, colorThinkTime + 1000); // 減少延遲時間
                     }
                     
-                    if (playResult && playResult.winner) {
-                        this.clearTurnTimer();
-                        this.clearComputerThinkTimer();
-                        this.io.to(this.roomId).emit('gameOver', { winner: playResult.winner });
-                    }
+                    // 勝利檢查已經在動畫系統中處理
                 }, secondThinkTime);
                 return;
             }
         }
 
         // 統一使用動畫系統後，所有操作都由 pauseAndResume 處理
-        if (result && result.winner) {
-            this.clearTurnTimer();
-            this.clearComputerThinkTimer();
-            this.io.to(this.roomId).emit('gameOver', { winner: result.winner });
-        }
+        // 勝利檢查已經在動畫系統中處理
     }
 
     broadcastGameUpdate(move, result) {
