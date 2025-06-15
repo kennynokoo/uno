@@ -1188,7 +1188,7 @@
                         <div class="game-rule-toggle">
                             <div>
                                 <span class="font-semibold">搶牌/插話 (Jump-In)</span>
-                                <p class="text-sm text-secondary">可以在任何時候出完全相同的牌</p>
+                                <p class="text-sm text-secondary">可以出牌後3秒內出完全相同的牌</p>
                             </div>
                             <div id="jump-in-toggle" class="toggle-switch" data-rule="jumpIn"></div>
                         </div>
@@ -1448,17 +1448,16 @@
             async handleGameUpdate(newGameState, lastMove, result) {
                 const oldGameState = this.gameState;
 
-                // 【問題2修正】在處理任何移動前，先重置 canPlayDrawnCard 旗標
+                // 在處理任何移動前，先重置 canPlayDrawnCard 旗標
                 if (lastMove && lastMove.type) {
                     this.canPlayDrawnCard = false;
                 }
-                // 【問題2修正】只有當是自己的操作且服務器允許時，才設置旗標
+                // 只有當是自己的操作且服務器允許時，才設置旗標
                 if (result && result.canPlayDrawnCard && lastMove && lastMove.playerId === this.myPlayerId) {
                     this.canPlayDrawnCard = true;
                 }
 
                 // 步驟 1: 比較新舊狀態，判斷需要播放哪些動畫
-                // =================================================
                 const isCardPlayAnimationNeeded = lastMove && (lastMove.type === 'playCard' || lastMove.type === 'jumpIn' || lastMove.type === 'playSharePainCard');
                 
                 let drawnCardsInfo = [];
@@ -1475,31 +1474,17 @@
                 }
                 const isDrawAnimationNeeded = drawnCardsInfo.length > 0;
 
-                // 步驟 2: 總是更新狀態，避免狀態不同步
-                // =================================================
-                // 先保存舊狀態用於動畫渲染
+                // 步驟 2: 總是立即更新內部狀態，但控制UI渲染時機
                 const savedHandStates = oldGameState && oldGameState.players ? 
                     oldGameState.players.map(p => ({ id: p.id, handLength: p.hand.length })) : null;
                 
-                // 總是立即更新狀態，確保不會出現狀態不同步
                 this.gameState = newGameState;
 
-                // 執行初始渲染
+                // 步驟 3: 執行初始渲染。如果需要播放抽牌動畫，則使用舊的手牌數量來渲染，避免數字提前跳動
                 if (isDrawAnimationNeeded && savedHandStates) {
-                    // 抽牌動畫期間：使用舊的手牌狀態渲染，避免數量提前變化
                     this.renderWithSavedHandStates(savedHandStates);
                 } else {
-                    // 正常渲染
-                    this.renderOtherPlayers();
-                    this.renderMyHand();
-                    if (!isCardPlayAnimationNeeded) {
-                        this.renderDiscardPile();
-                    }
-                    this.renderDrawPile();
-                    this.updateGameInfo();
-                    this.highlightCurrentPlayer();
-                    this.updateSharePainStatus();
-                    this.handleTimerDisplay();
+                    this.renderGameState();
                 }
                 
                 this.checkJumpInOpportunity();
@@ -1512,8 +1497,7 @@
                 this.isAnimating = true;
 
                 try {
-                    // 步驟 3: 按順序播放動畫
-                    // =================================================
+                    // 步驟 4: 按順序播放動畫
                     
                     // 動畫一：出牌
                     if (isCardPlayAnimationNeeded) {
@@ -1524,7 +1508,6 @@
                         const endElement = document.getElementById('discard-pile');
                         
                         if (topCard && startElement && endElement) {
-                            // 播放音效
                             if (topCard.type === 'skip') { this.playSound(this.skipSound); }
                             else if (topCard.type === 'drawTwo') { this.playSound(this.drawTwoSound); }
                             else if (topCard.type === 'wildDrawFour') { this.playSound(this.drawFourSound); }
@@ -1566,24 +1549,21 @@
                            await this.showSharePainActivation(result.triggerPlayer, result.affectedPlayers, result.penaltyCount);
                         }
                         
-                        // 添加緩衝時間，確保所有動畫和提示框完整顯示
                         if (result.skippedPlayerId || result.jumpIn || result.shieldUsed || result.sharePainUsed || result.sharePainTriggered) {
                             await new Promise(resolve => setTimeout(resolve, 200));
                         }
                     }
 
-                    // 動畫三：抽牌 (這是關鍵)
+                    // 動畫三：抽牌
                     if (isDrawAnimationNeeded) {
-                        // 播放抽牌動畫
                         await this.animateDrawCards(drawnCardsInfo);
                         
-                        // 抽牌動畫結束後，重新渲染所有內容以顯示最終狀態
-                        this.renderMyHand();
-                        this.renderOtherPlayers();
-                        this.renderDrawPile();
+                        // *** BUG FIX ***
+                        // 動畫結束後，執行一次完整的畫面渲染，確保所有UI（包括高亮）都是最新且正確的狀態
+                        this.renderGameState();
                     }
 
-                    // 步驟 4 & 5: 最終通知與操作
+                    // 步驟 5: 最終通知與操作
                     if (result && result.newUnoPlayer) {
                         this.playSound(this.unoSound);
                         const unoPlayer = this.gameState.players.find(p => p.id === result.newUnoPlayer);
@@ -1612,7 +1592,7 @@
                     if(this.gameState.lastMove?.type === 'timeout') {
                          timerDisplay.textContent = '回合超時';
                     } else {
-                         timerDisplay.textContent = '等待動畫...';
+                         timerDisplay.textContent = '處理中...';
                     }
                     return;
                 }
@@ -1694,8 +1674,8 @@
                 }
             }
 
-            async animateDrawCards(drawnCards) {
-                for (const drawnCardInfo of drawnCards) {
+            async animateDrawCards(drawnCardsInfo) {
+                for (const drawnCardInfo of drawnCardsInfo) {
                     this.playSound(this.drawCardSound);
                     
                     const targetPlayer = this.gameState.players.find(p => p.id === drawnCardInfo.targetId);
@@ -2252,40 +2232,29 @@
             renderWithSavedHandStates(savedHandStates) {
                 if (!this.gameState) return;
 
-                // 暫時保存當前狀態（深拷貝手牌）
-                const originalPlayers = this.gameState.players.map(p => ({ 
-                    ...p, 
-                    hand: [...p.hand] 
-                }));
+                const originalPlayers = JSON.parse(JSON.stringify(this.gameState.players));
 
-                // 臨時修改手牌數量為動畫前的狀態
-                if (savedHandStates) {
-                    this.gameState.players.forEach(player => {
-                        const savedState = savedHandStates.find(s => s.id === player.id);
-                        if (savedState && savedState.handLength < player.hand.length) {
-                            // 對於自己，保留實際牌面但截取到舊數量
-                            if (player.id === this.myPlayerId) {
-                                player.hand = player.hand.slice(0, savedState.handLength);
-                            } else {
-                                // 對於其他玩家，創建空牌占位
-                                player.hand = Array(savedState.handLength).fill({});
+                try {
+                    if (savedHandStates) {
+                        this.gameState.players.forEach(player => {
+                            const savedState = savedHandStates.find(s => s.id === player.id);
+                            if (savedState) {
+                                if (player.id === this.myPlayerId) {
+                                     document.getElementById('my-card-count').textContent = savedState.handLength;
+                                     player.hand = player.hand.slice(0, savedState.handLength);
+                                } else {
+                                     player.hand = Array(savedState.handLength).fill({});
+                                     player.handCount = savedState.handLength;
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
+
+                    this.renderGameState();
+
+                } finally {
+                    this.gameState.players = originalPlayers;
                 }
-
-                // 執行渲染
-                this.renderOtherPlayers();
-                this.renderMyHand();
-                this.renderDiscardPile();
-                this.renderDrawPile();
-                this.updateGameInfo();
-                this.highlightCurrentPlayer();
-                this.updateSharePainStatus();
-                this.handleTimerDisplay();
-
-                // 恢復原始狀態
-                this.gameState.players = originalPlayers;
             }
 
             renderGameState() {
