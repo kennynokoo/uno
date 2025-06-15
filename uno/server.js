@@ -26,7 +26,7 @@ const ANIMATION_DURATIONS = {
     TIMEOUT: 1900,
     SHIELD: 2800, // 前端盾牌動畫實際需要2800ms
     BASIC_CARD: 800, // 增加基本卡片動畫時間，確保前端600ms動畫有足夠緩衝
-    JUMP_IN: 800, // 增加Jump-in動畫時間
+    JUMP_IN: 1300, // Jump-in動畫時間，匹配前端1300ms動畫
     
     // 電腦玩家專用的較短動畫時間，保持流暢度
     COMPUTER: {
@@ -38,7 +38,7 @@ const ANIMATION_DURATIONS = {
         TIMEOUT: 1200,
         SHIELD: 2000, // 電腦也需要等待盾牌動畫
         BASIC_CARD: 700, // 電腦也需要等待前端動畫完成
-        JUMP_IN: 700
+        JUMP_IN: 1100 // 電腦Jump-in動畫時間，略短於人類玩家但足夠播放
     }
 };
 
