@@ -1448,6 +1448,15 @@
             async handleGameUpdate(newGameState, lastMove, result) {
                 const oldGameState = this.gameState;
 
+                // 【問題2修正】在處理任何移動前，先重置 canPlayDrawnCard 旗標
+                if (lastMove && lastMove.type) {
+                    this.canPlayDrawnCard = false;
+                }
+                // 【問題2修正】只有當是自己的操作且服務器允許時，才設置旗標
+                if (result && result.canPlayDrawnCard && lastMove && lastMove.playerId === this.myPlayerId) {
+                    this.canPlayDrawnCard = true;
+                }
+
                 // 步驟 1: 比較新舊狀態，判斷需要播放哪些動畫
                 // =================================================
                 const isCardPlayAnimationNeeded = lastMove && (lastMove.type === 'playCard' || lastMove.type === 'jumpIn' || lastMove.type === 'playSharePainCard');
@@ -1472,10 +1481,6 @@
                 // 如果需要，則暫時不更新 `this.gameState`，讓畫面停留在舊狀態
                 if (!isDrawAnimationNeeded) {
                     this.gameState = newGameState;
-                }
-                
-                if (result && result.canPlayDrawnCard) {
-                    this.canPlayDrawnCard = true;
                 }
 
                 // 執行初始渲染
@@ -1569,6 +1574,9 @@
                         // 根據最新狀態，重新渲染所有玩家的區域，此時手牌數量才會更新
                         this.renderMyHand();
                         this.renderOtherPlayers();
+                        
+                        // 【問題1修正】用最新狀態重新渲染抽牌堆，移除高亮
+                        this.renderDrawPile();
                     }
 
                     // 步驟 4: 播放最終的通知 (UNO, 勝利等)
