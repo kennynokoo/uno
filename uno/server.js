@@ -22,11 +22,11 @@ const ANIMATION_DURATIONS = {
     DRAW_CARD: 500,
     DRAW_CARD_DELAY: 150, // 前端每張抽牌動畫之間的延遲
     SKIP: 2000,
-    REVERSE: 1400,
-    TIMEOUT: 1900,
+    REVERSE: 1500,
+    TIMEOUT: 2000,
     SHIELD: 3000, // 前端盾牌動畫實際需要2800ms
     BASIC_CARD: 800, // 增加基本卡片動畫時間，確保前端600ms動畫有足夠緩衝
-    JUMP_IN: 1400, // Jump-in動畫時間，匹配前端1300ms動畫
+    JUMP_IN: 2000, // Jump-in動畫時間，匹配前端1300ms動畫
     
     // 電腦玩家專用的較短動畫時間，保持流暢度
     COMPUTER: {
@@ -34,11 +34,11 @@ const ANIMATION_DURATIONS = {
         SHARE_PAIN_TRIGGER: 3000,
         DRAW_CARD: 500,
         SKIP: 2000,
-        REVERSE: 1400,
+        REVERSE: 1500,
         TIMEOUT: 1200,
         SHIELD: 3000, // 電腦也需要等待盾牌動畫
         BASIC_CARD: 800, // 電腦也需要等待前端動畫完成
-        JUMP_IN: 1400 // 電腦Jump-in動畫時間，略短於人類玩家但足夠播放
+        JUMP_IN: 2000 // 電腦Jump-in動畫時間，略短於人類玩家但足夠播放
     }
 };
 
