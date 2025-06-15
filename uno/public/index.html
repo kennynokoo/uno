@@ -2342,7 +2342,11 @@
                 
                 myPlayer.hand.forEach((card, index) => {
                     const isPlayableOnMyTurn = isMyTurn && this.isCardPlayable(card, topCard, myPlayer.hand.length);
-                    const canPlayTheDrawnCard = this.canPlayDrawnCard && index === myPlayer.hand.length - 1;
+                    // 避免在動畫期間錯誤高亮被截斷手牌中的最後一張
+                    const canPlayTheDrawnCard = this.canPlayDrawnCard && 
+                                               index === myPlayer.hand.length - 1 && 
+                                               !this.isAnimating && 
+                                               !this.isProcessingAnimations;
                     
                     const canJumpIn = this.gameState.gameRules.jumpIn && 
                                      this.jumpInWindow &&
