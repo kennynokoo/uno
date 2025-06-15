@@ -1475,27 +1475,32 @@
                 }
                 const isDrawAnimationNeeded = drawnCardsInfo.length > 0;
 
-                // 步驟 2: 根據動畫需求，決定初始渲染的內容
+                // 步驟 2: 總是更新狀態，避免狀態不同步
                 // =================================================
-                // 如果不需要播放抽牌動畫，我們可以立即更新到最新狀態
-                // 如果需要，則暫時不更新 `this.gameState`，讓畫面停留在舊狀態
-                if (!isDrawAnimationNeeded) {
-                    this.gameState = newGameState;
-                }
+                // 先保存舊狀態用於動畫渲染
+                const savedHandStates = oldGameState && oldGameState.players ? 
+                    oldGameState.players.map(p => ({ id: p.id, handLength: p.hand.length })) : null;
+                
+                // 總是立即更新狀態，確保不會出現狀態不同步
+                this.gameState = newGameState;
 
                 // 執行初始渲染
-                // 如果是出牌動畫，先不渲染棄牌堆，讓卡片飛過去之後再更新
-                // 如果是抽牌動畫，`this.gameState` 仍然是舊的，所以手牌數量不會立即變化
-                this.renderOtherPlayers();
-                this.renderMyHand();
-                if (!isCardPlayAnimationNeeded) {
-                    this.renderDiscardPile();
+                if (isDrawAnimationNeeded && savedHandStates) {
+                    // 抽牌動畫期間：使用舊的手牌狀態渲染，避免數量提前變化
+                    this.renderWithSavedHandStates(savedHandStates);
+                } else {
+                    // 正常渲染
+                    this.renderOtherPlayers();
+                    this.renderMyHand();
+                    if (!isCardPlayAnimationNeeded) {
+                        this.renderDiscardPile();
+                    }
+                    this.renderDrawPile();
+                    this.updateGameInfo();
+                    this.highlightCurrentPlayer();
+                    this.updateSharePainStatus();
+                    this.handleTimerDisplay();
                 }
-                this.renderDrawPile();
-                this.updateGameInfo();
-                this.highlightCurrentPlayer();
-                this.updateSharePainStatus();
-                this.handleTimerDisplay();
                 
                 this.checkJumpInOpportunity();
 
@@ -1567,14 +1572,9 @@
                         // 播放抽牌動畫
                         await this.animateDrawCards(drawnCardsInfo);
                         
-                        // 抽牌動畫結束後，才正式將客戶端狀態更新為最新狀態
-                        this.gameState = newGameState;
-                        
-                        // 根據最新狀態，重新渲染所有玩家的區域，此時手牌數量才會更新
+                        // 抽牌動畫結束後，重新渲染所有內容以顯示最終狀態
                         this.renderMyHand();
                         this.renderOtherPlayers();
-                        
-                        // 【問題1修正】用最新狀態重新渲染抽牌堆，移除高亮
                         this.renderDrawPile();
                     }
 
@@ -2242,6 +2242,45 @@
                     readyBtn.textContent = '遊戲即將開始...';
                     readyBtn.disabled = true;
                 }
+            }
+
+            renderWithSavedHandStates(savedHandStates) {
+                if (!this.gameState) return;
+
+                // 暫時保存當前狀態（深拷貝手牌）
+                const originalPlayers = this.gameState.players.map(p => ({ 
+                    ...p, 
+                    hand: [...p.hand] 
+                }));
+
+                // 臨時修改手牌數量為動畫前的狀態
+                if (savedHandStates) {
+                    this.gameState.players.forEach(player => {
+                        const savedState = savedHandStates.find(s => s.id === player.id);
+                        if (savedState && savedState.handLength < player.hand.length) {
+                            // 對於自己，保留實際牌面但截取到舊數量
+                            if (player.id === this.myPlayerId) {
+                                player.hand = player.hand.slice(0, savedState.handLength);
+                            } else {
+                                // 對於其他玩家，創建空牌占位
+                                player.hand = Array(savedState.handLength).fill({});
+                            }
+                        }
+                    });
+                }
+
+                // 執行渲染
+                this.renderOtherPlayers();
+                this.renderMyHand();
+                this.renderDiscardPile();
+                this.renderDrawPile();
+                this.updateGameInfo();
+                this.highlightCurrentPlayer();
+                this.updateSharePainStatus();
+                this.handleTimerDisplay();
+
+                // 恢復原始狀態
+                this.gameState.players = originalPlayers;
             }
 
             renderGameState() {
