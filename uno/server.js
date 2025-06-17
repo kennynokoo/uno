@@ -80,6 +80,8 @@ class GameRoom {
         };
         this.computerThinkTimer = null;
         this.actionInProgress = false;
+        this.createdTime = Date.now();
+        this.isPrivate = false;
         
         // Jump-In properties
         this.jumpInWindow = null;
@@ -114,8 +116,15 @@ class GameRoom {
             this.players.splice(index, 1);
             playerSockets.delete(socketId);
             
-            if (this.players.length === 0) {
+            // 清理房間條件：沒有玩家，或只剩電腦玩家
+            if (this.players.length === 0 || this.players.every(p => p.isComputer)) {
+                // 清理所有定時器
+                this.clearTurnTimer();
+                this.clearComputerThinkTimer();
+                this.clearJumpInWindow();
+                
                 rooms.delete(this.roomId);
+                console.log(`房間 ${this.roomId} 已清理：無真實玩家`);
                 return true;
             }
         }
@@ -1278,18 +1287,176 @@ class GameRoom {
     }
 }
 
+// 快速匹配邏輯
+function findBestAvailableRoom() {
+    const availableRooms = [];
+    
+    // 篩選符合條件的房間
+    for (const [roomId, room] of rooms) {
+        if (!room.started && 
+            room.players.length < room.maxPlayers && 
+            !room.isPrivate) {
+            availableRooms.push({
+                roomId,
+                room,
+                playerCount: room.players.length,
+                createdTime: room.createdTime
+            });
+        }
+    }
+    
+    if (availableRooms.length === 0) {
+        return null; // 沒有可用房間
+    }
+    
+    // 按優先級排序：人數多 -> 創建時間新
+    availableRooms.sort((a, b) => {
+        if (a.playerCount !== b.playerCount) {
+            return b.playerCount - a.playerCount; // 人數多的優先
+        }
+        return b.createdTime - a.createdTime; // 創建時間新的優先
+    });
+    
+    return availableRooms[0];
+}
+
+// 15秒搜尋匹配邏輯
+function startQuickMatchSearch(socket, playerName) {
+    let searchCount = 0;
+    const maxSearchTime = 15000; // 15秒
+    const searchInterval = 1000; // 每1秒搜尋一次，提高搜尋頻率
+    const maxSearchAttempts = maxSearchTime / searchInterval;
+    
+    const searchTimer = setInterval(() => {
+        searchCount++;
+        
+        // 檢查玩家是否仍然連接且未加入房間
+        const existingPlayerInfo = playerSockets.get(socket.id);
+        if (existingPlayerInfo) {
+            clearInterval(searchTimer);
+            socket.emit('quickMatchError', '您已經在房間中');
+            return;
+        }
+        
+        // 嘗試找到可用房間
+        const bestRoomInfo = findBestAvailableRoom();
+        
+        if (bestRoomInfo) {
+            // 找到可用房間，立即加入
+            clearInterval(searchTimer);
+            
+            const room = bestRoomInfo.room;
+            const player = room.addPlayer(socket.id, playerName);
+            
+            if (player) {
+                socket.join(bestRoomInfo.roomId);
+                
+                socket.emit('quickMatchSuccess', { 
+                    roomId: bestRoomInfo.roomId, 
+                    player,
+                    gameRules: room.gameRules,
+                    foundExisting: true,
+                    playerCount: room.players.length
+                });
+                
+                io.to(bestRoomInfo.roomId).emit('roomUpdate', {
+                    players: room.players,
+                    canStart: room.canStart(),
+                    gameRules: room.gameRules
+                });
+            } else {
+                // 房間在加入時已滿，繼續搜尋
+                if (searchCount >= maxSearchAttempts) {
+                    clearInterval(searchTimer);
+                    socket.emit('quickMatchNoRoomsFound', {
+                        searchTime: maxSearchTime / 1000
+                    });
+                } else {
+                    socket.emit('quickMatchSearching', {
+                        attempt: searchCount,
+                        maxAttempts: maxSearchAttempts,
+                        timeRemaining: Math.ceil((maxSearchAttempts - searchCount) * searchInterval / 1000)
+                    });
+                }
+            }
+        } else {
+            // 沒找到房間
+            if (searchCount >= maxSearchAttempts) {
+                // 15秒搜尋結束，詢問是否創建新房間
+                clearInterval(searchTimer);
+                socket.emit('quickMatchNoRoomsFound', {
+                    searchTime: maxSearchTime / 1000
+                });
+            } else {
+                // 繼續搜尋，發送進度更新
+                socket.emit('quickMatchSearching', {
+                    attempt: searchCount,
+                    maxAttempts: maxSearchAttempts,
+                    timeRemaining: Math.ceil((maxSearchAttempts - searchCount) * searchInterval / 1000)
+                });
+            }
+        }
+    }, searchInterval);
+    
+    // 立即進行第一次搜尋
+    const initialRoomInfo = findBestAvailableRoom();
+    if (initialRoomInfo) {
+        clearInterval(searchTimer);
+        
+        const room = initialRoomInfo.room;
+        const player = room.addPlayer(socket.id, playerName);
+        
+        if (player) {
+            socket.join(initialRoomInfo.roomId);
+            
+            socket.emit('quickMatchSuccess', { 
+                roomId: initialRoomInfo.roomId, 
+                player,
+                gameRules: room.gameRules,
+                foundExisting: true,
+                playerCount: room.players.length
+            });
+            
+            io.to(initialRoomInfo.roomId).emit('roomUpdate', {
+                players: room.players,
+                canStart: room.canStart(),
+                gameRules: room.gameRules
+            });
+        } else {
+            // 開始定時搜尋
+            socket.emit('quickMatchSearching', {
+                attempt: 0,
+                maxAttempts: maxSearchAttempts,
+                timeRemaining: maxSearchTime / 1000
+            });
+        }
+    } else {
+        // 開始定時搜尋
+        socket.emit('quickMatchSearching', {
+            attempt: 0,
+            maxAttempts: maxSearchAttempts,
+            timeRemaining: maxSearchTime / 1000
+        });
+    }
+}
+
 io.on('connection', (socket) => {
     console.log('新玩家連接:', socket.id);
 
-    socket.on('createRoom', (playerName) => {
+    socket.on('createRoom', (data) => {
+        // 兼容舊版本（字符串）和新版本（對象）
+        const playerName = typeof data === 'string' ? data : (data.playerName || '玩家');
+        const isPrivate = typeof data === 'object' ? (data.isPrivate || false) : false;
+        
         const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
         const room = new GameRoom(roomId, io);
+        room.isPrivate = isPrivate;
         rooms.set(roomId, room);
         
         const player = room.addPlayer(socket.id, playerName);
         socket.join(roomId);
         
-        socket.emit('roomCreated', { roomId, player });
+        socket.emit('roomCreated', { roomId, player, isPrivate });
         io.to(roomId).emit('roomUpdate', {
             players: room.players,
             canStart: room.canStart(),
@@ -1411,6 +1578,64 @@ io.on('connection', (socket) => {
         room.requestRematch(playerInfo.playerId);
     });
 
+    socket.on('quickMatch', (playerName) => {
+        const name = playerName || '玩家';
+        
+        // 檢查玩家是否已經在房間中
+        const existingPlayerInfo = playerSockets.get(socket.id);
+        if (existingPlayerInfo) {
+            socket.emit('quickMatchError', '您已經在房間中，請先離開當前房間');
+            return;
+        }
+        
+        try {
+            // 開始15秒搜尋過程
+            startQuickMatchSearch(socket, name);
+        } catch (error) {
+            console.error('快速匹配錯誤:', error);
+            socket.emit('quickMatchError', '快速匹配失敗，請稍後再試');
+        }
+    });
+
+    socket.on('quickMatchCreateRoom', (playerName) => {
+        const name = playerName || '玩家';
+        
+        // 檢查玩家是否已經在房間中
+        const existingPlayerInfo = playerSockets.get(socket.id);
+        if (existingPlayerInfo) {
+            socket.emit('quickMatchError', '您已經在房間中，請先離開當前房間');
+            return;
+        }
+        
+        try {
+            // 用戶確認創建新房間（快速匹配創建的房間默認為非private）
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const room = new GameRoom(roomId, io);
+            room.isPrivate = false; // 快速匹配創建的房間設為公開
+            rooms.set(roomId, room);
+            
+            const player = room.addPlayer(socket.id, name);
+            socket.join(roomId);
+            
+            socket.emit('quickMatchSuccess', { 
+                roomId, 
+                player,
+                gameRules: room.gameRules,
+                foundExisting: false,
+                playerCount: 1
+            });
+            
+            io.to(roomId).emit('roomUpdate', {
+                players: room.players,
+                canStart: room.canStart(),
+                gameRules: room.gameRules
+            });
+        } catch (error) {
+            console.error('創建房間錯誤:', error);
+            socket.emit('quickMatchError', '創建房間失敗，請稍後再試');
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log('玩家斷線:', socket.id);
         
@@ -1456,4 +1681,17 @@ server.listen(PORT, HOST, () => {
     console.log(`多人UNO遊戲服務器正在運行於 http://${HOST}:${PORT}`);
     console.log(`本地訪問: http://localhost:${PORT}`);
     console.log(`按 Ctrl+C 停止服務器`);
+}).on('error', (err) => {
+    if (err.code === 'EACCES') {
+        console.error(`權限錯誤：無法綁定端口 ${PORT}`);
+        console.error('請嘗試：');
+        console.error('1. 使用管理員權限運行命令提示符');
+        console.error('2. 或設置不同端口：set PORT=9000 && node server.js');
+        console.error('3. 或嘗試端口範圍：8000-9999');
+    } else if (err.code === 'EADDRINUSE') {
+        console.error(`端口 ${PORT} 已被佔用，請嘗試其他端口`);
+    } else {
+        console.error('服務器啟動錯誤：', err);
+    }
+    process.exit(1);
 });
