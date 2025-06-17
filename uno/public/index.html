@@ -5,12 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UNO Online</title>
     <link rel="icon" href="/icon.ico" type="image/x-icon">
+    
+    <!-- 預載資源以提升性能 -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Bebas+Neue&family=Orbitron:wght@700;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <link rel="preload" href="https://cdn.tailwindcss.com" as="script">
+    <link rel="preload" href="/socket.io/socket.io.js" as="script">
+    
+    <!-- 字體備用載入 -->
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Bebas+Neue&family=Orbitron:wght@700;900&display=swap"></noscript>
+    
 	<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1356046266101380"
      crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Bebas+Neue&family=Orbitron:wght@700;900&display=swap');
 
         :root {
             --primary-dark: #0a0e27;
@@ -95,6 +103,9 @@
             position: relative; 
             padding: 8px;
             transform-style: preserve-3d;
+            transform: translateZ(0);
+            will-change: transform;
+            backface-visibility: hidden;
             box-shadow: 
                 0 4px 20px rgba(0,0,0,0.4),
                 inset 0 1px 0 rgba(255,255,255,0.2),
@@ -117,7 +128,7 @@
         }
 
         .card:hover {
-            transform: translateY(-12px) scale(1.08) rotateX(-5deg);
+            transform: translateY(-12px) scale(1.08) rotateX(-5deg) translateZ(0);
             box-shadow: 
                 0 20px 40px rgba(0,0,0,0.5),
                 0 0 20px currentColor,
@@ -172,6 +183,8 @@
                 rgba(41, 121, 255, 0.1) 20px
             );
             animation: cardBackPattern 20s linear infinite;
+            will-change: transform;
+            transform: translateZ(0);
         }
 
         @keyframes cardBackPattern {
@@ -660,6 +673,30 @@
             box-shadow: 0 8px 30px rgba(0, 230, 118, 0.5);
         }
 
+        .btn-warning {
+            background: linear-gradient(135deg, #ffa726 0%, #ff8f00 100%);
+            color: white;
+            font-weight: 600;
+            padding: 12px 32px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(255, 167, 38, 0.5);
+        }
+
+        .btn-warning:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         .input-field {
             width: 100%;
             padding: 14px 20px;
@@ -975,7 +1012,7 @@
             }
         }
 
-        #player-selector-modal {
+        #player-selector-modal, #quick-match-confirm-modal {
             position: fixed;
             top: 50%;
             left: 50%;
@@ -1430,14 +1467,15 @@
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen p-2">
     <audio id="bgm" src="/bgm.mp3" loop></audio>
-    <audio id="play-card-sound" src="/play.mp3" preload="auto"></audio>
-    <audio id="draw-card-sound" src="/draw.mp3" preload="auto"></audio>
-    <audio id="uno-sound" src="/uno.wav" preload="auto"></audio>
-    <audio id="draw-two-sound" src="/draw-two.wav" preload="auto"></audio>
-    <audio id="draw-four-sound" src="/draw-four.wav" preload="auto"></audio>
-    <audio id="shield-sound" src="/Shield.mp3" preload="auto"></audio>
-    <audio id="share-pain-sound" src="/share-pain.mp3" preload="auto"></audio>
-    <audio id="skip-sound" src="/skip.mp3" preload="auto"></audio>
+    <audio id="play-card-sound" src="/play.mp3" preload="none"></audio>
+    <audio id="draw-card-sound" src="/draw.mp3" preload="none"></audio>
+    <audio id="uno-sound" src="/uno.wav" preload="none"></audio>
+    <audio id="draw-two-sound" src="/draw-two.wav" preload="none"></audio>
+    <audio id="draw-four-sound" src="/draw-four.wav" preload="none"></audio>
+    <audio id="shield-sound" src="/Shield.mp3" preload="none"></audio>
+    <audio id="share-pain-sound" src="/share-pain.mp3" preload="none"></audio>
+    <audio id="skip-sound" src="/skip.mp3" preload="none"></audio>
+    <audio id="lock-sound" src="/lock.mp3" preload="none"></audio>
     
     <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
         <button id="fullscreen-btn" class="p-3 rounded-full bg-slate-700/50 hover:bg-slate-600/70 transition-colors" title="全螢幕">
@@ -1473,8 +1511,20 @@
                 </div>
 
                 <div class="space-y-4">
-                    <button id="create-room-btn" class="btn-primary w-full">
-                        創建房間
+                    <div class="create-room-section">
+                        <div class="private-room-option mb-3">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="checkbox" id="private-room-checkbox" class="mr-3 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                                <span class="text-sm text-secondary">私人房間（不會被快速匹配到）</span>
+                            </label>
+                        </div>
+                        <button id="create-room-btn" class="btn-primary w-full">
+                            創建房間
+                        </button>
+                    </div>
+                    
+                    <button id="quick-match-btn" class="btn-warning w-full">
+                        🚀 快速匹配
                     </button>
                     
                     <div class="flex space-x-3">
@@ -1617,6 +1667,18 @@
             </div>
         </div>
 
+        <div id="quick-match-confirm-modal" class="hidden">
+            <h3 class="neon-text text-2xl text-center mb-6">快速匹配</h3>
+            <div id="quick-match-message" class="text-center mb-6">
+                <p class="text-secondary">搜尋了 15 秒未找到可用房間</p>
+                <p class="text-primary font-semibold">是否創建新房間？</p>
+            </div>
+            <div class="flex justify-center space-x-4">
+                <button id="confirm-create-room" class="btn-primary">創建房間</button>
+                <button id="cancel-quick-match" class="btn-secondary">取消</button>
+            </div>
+        </div>
+
         <div id="share-pain-status" class="hidden">
             <div class="text-center">
                 <div class="text-lg font-bold">🔗 同甘共苦</div>
@@ -1714,6 +1776,7 @@
                 this.shieldSound = document.getElementById('shield-sound');
                 this.sharePainSound = document.getElementById('share-pain-sound');
                 this.skipSound = document.getElementById('skip-sound');
+                this.lockSound = document.getElementById('lock-sound');
                 
                 this.muteBtn = document.getElementById('mute-btn');
                 this.unmuteIcon = document.getElementById('unmute-icon');
@@ -1733,6 +1796,7 @@
                 if (this.shieldSound) this.shieldSound.volume = 0.9;
                 if (this.sharePainSound) this.sharePainSound.volume = 0.9;
                 if (this.skipSound) this.skipSound.volume = 0.8;
+                if (this.lockSound) this.lockSound.volume = 0.8;
 
                 this.setupSocketListeners();
                 this.setupUIListeners();
@@ -2215,6 +2279,92 @@
                     this.showError(error);
                 });
 
+                this.socket.on('quickMatchSuccess', ({ roomId, player, gameRules, foundExisting, playerCount }) => {
+                    // 清除倒數計時器
+                    if (this.quickMatchCountdownTimer) {
+                        clearInterval(this.quickMatchCountdownTimer);
+                        this.quickMatchCountdownTimer = null;
+                    }
+                    
+                    this.roomId = roomId;
+                    this.myPlayerId = player.id;
+                    this.isRoomCreator = !foundExisting;
+                    this.gameRules = gameRules;
+                    this.showWaitingRoom(roomId);
+                    
+                    // 重置按鈕狀態
+                    const quickMatchBtn = document.getElementById('quick-match-btn');
+                    quickMatchBtn.disabled = false;
+                    quickMatchBtn.textContent = '🚀 快速匹配';
+                    
+                    // 如果是房間創建者，顯示規則設定
+                    if (!foundExisting) {
+                        document.getElementById('game-rules-section').classList.remove('hidden');
+                    }
+                    
+                    this.updateRulesDisplay();
+                    
+                    // 顯示匹配成功訊息
+                    if (foundExisting) {
+                        this.showSuccess(`成功加入房間！當前 ${playerCount} 人`);
+                    } else {
+                        this.showSuccess('創建新房間成功！等待其他玩家加入');
+                    }
+                });
+
+                this.socket.on('quickMatchError', (error) => {
+                    // 清除倒數計時器
+                    if (this.quickMatchCountdownTimer) {
+                        clearInterval(this.quickMatchCountdownTimer);
+                        this.quickMatchCountdownTimer = null;
+                    }
+                    
+                    this.showError(error);
+                    
+                    // 重置按鈕狀態
+                    const quickMatchBtn = document.getElementById('quick-match-btn');
+                    quickMatchBtn.disabled = false;
+                    quickMatchBtn.textContent = '🚀 快速匹配';
+                });
+
+                this.socket.on('quickMatchSearching', ({ attempt, maxAttempts, timeRemaining }) => {
+                    const quickMatchBtn = document.getElementById('quick-match-btn');
+                    
+                    // 清除之前的倒數計時器
+                    if (this.quickMatchCountdownTimer) {
+                        clearInterval(this.quickMatchCountdownTimer);
+                    }
+                    
+                    let remainingTime = timeRemaining;
+                    quickMatchBtn.textContent = `搜尋中... ${remainingTime}s`;
+                    
+                    // 開始實時倒數
+                    this.quickMatchCountdownTimer = setInterval(() => {
+                        remainingTime--;
+                        if (remainingTime >= 0) {
+                            quickMatchBtn.textContent = `搜尋中... ${remainingTime}s`;
+                        } else {
+                            clearInterval(this.quickMatchCountdownTimer);
+                        }
+                    }, 1000);
+                });
+
+                this.socket.on('quickMatchNoRoomsFound', ({ searchTime }) => {
+                    // 清除倒數計時器
+                    if (this.quickMatchCountdownTimer) {
+                        clearInterval(this.quickMatchCountdownTimer);
+                        this.quickMatchCountdownTimer = null;
+                    }
+                    
+                    // 重置按鈕狀態
+                    const quickMatchBtn = document.getElementById('quick-match-btn');
+                    quickMatchBtn.disabled = false;
+                    quickMatchBtn.textContent = '🚀 快速匹配';
+                    
+                    // 顯示確認對話框
+                    this.showQuickMatchConfirmModal(searchTime);
+                });
+
                 this.socket.on('roomUpdate', ({ players, canStart, gameRules }) => {
                     this.updatePlayersList(players);
                     if (gameRules) {
@@ -2225,6 +2375,12 @@
 
                 this.socket.on('gameStart', ({ playerId, gameState }) => {
                     console.log('遊戲開始:', { playerId, currentPlayerIndex: gameState.currentPlayerIndex });
+                    
+                    // 清除快速匹配倒數計時器
+                    if (this.quickMatchCountdownTimer) {
+                        clearInterval(this.quickMatchCountdownTimer);
+                        this.quickMatchCountdownTimer = null;
+                    }
                     
                     this.myPlayerId = playerId;
                     this.gameState = gameState;
@@ -2292,7 +2448,8 @@
             setupUIListeners() {
                 document.getElementById('create-room-btn').addEventListener('click', () => {
                     const playerName = document.getElementById('player-name').value.trim() || '玩家';
-                    this.socket.emit('createRoom', playerName);
+                    const isPrivate = document.getElementById('private-room-checkbox').checked;
+                    this.socket.emit('createRoom', { playerName, isPrivate });
                 });
 
                 document.getElementById('join-room-btn').addEventListener('click', () => {
@@ -2305,6 +2462,37 @@
                     }
                     
                     this.socket.emit('joinRoom', { roomId, playerName });
+                });
+
+                document.getElementById('quick-match-btn').addEventListener('click', () => {
+                    const playerName = document.getElementById('player-name').value.trim() || '玩家';
+                    const quickMatchBtn = document.getElementById('quick-match-btn');
+                    
+                    // 清除之前的倒數計時器
+                    if (this.quickMatchCountdownTimer) {
+                        clearInterval(this.quickMatchCountdownTimer);
+                        this.quickMatchCountdownTimer = null;
+                    }
+                    
+                    quickMatchBtn.disabled = true;
+                    quickMatchBtn.textContent = '匹配中...';
+                    
+                    this.socket.emit('quickMatch', playerName);
+                    
+                    // 添加超時重置機制，防止按鈕永遠禁用
+                    setTimeout(() => {
+                        if (quickMatchBtn.disabled && quickMatchBtn.textContent === '匹配中...') {
+                            // 清除倒數計時器
+                            if (this.quickMatchCountdownTimer) {
+                                clearInterval(this.quickMatchCountdownTimer);
+                                this.quickMatchCountdownTimer = null;
+                            }
+                            
+                            quickMatchBtn.disabled = false;
+                            quickMatchBtn.textContent = '🚀 快速匹配';
+                            this.showError('快速匹配超時，請檢查網絡連接');
+                        }
+                    }, 10000); // 10秒超時
                 });
 
                 document.getElementById('ready-btn').addEventListener('click', () => {
@@ -2336,6 +2524,16 @@
 
                 document.getElementById('leave-game-btn').addEventListener('click', () => {
                     location.reload();
+                });
+
+                document.getElementById('confirm-create-room').addEventListener('click', () => {
+                    const playerName = document.getElementById('player-name').value.trim() || '玩家';
+                    this.hideQuickMatchConfirmModal();
+                    this.socket.emit('quickMatchCreateRoom', playerName);
+                });
+
+                document.getElementById('cancel-quick-match').addEventListener('click', () => {
+                    this.hideQuickMatchConfirmModal();
                 });
                 
                 this.muteBtn.addEventListener('click', () => {
@@ -2383,10 +2581,37 @@
                 setTimeout(() => errorEl.classList.add('hidden'), 3000);
             }
 
+            showSuccess(message) {
+                const errorEl = document.getElementById('error-message');
+                errorEl.textContent = message;
+                errorEl.className = 'mt-6 text-green-400 text-center font-semibold';
+                setTimeout(() => {
+                    errorEl.classList.add('hidden');
+                    errorEl.className = 'mt-6 text-red-400 text-center hidden font-semibold';
+                }, 3000);
+            }
+
             showWaitingRoom(roomId) {
                 document.getElementById('room-setup').classList.add('hidden');
                 document.getElementById('waiting-room').classList.remove('hidden');
                 document.getElementById('room-code-display').textContent = roomId;
+            }
+
+            showQuickMatchConfirmModal(searchTime) {
+                const modal = document.getElementById('quick-match-confirm-modal');
+                const message = document.getElementById('quick-match-message');
+                
+                message.innerHTML = `
+                    <p class="text-secondary">搜尋了 ${searchTime} 秒未找到可用房間</p>
+                    <p class="text-primary font-semibold">是否創建新房間？</p>
+                `;
+                
+                modal.classList.remove('hidden');
+            }
+
+            hideQuickMatchConfirmModal() {
+                const modal = document.getElementById('quick-match-confirm-modal');
+                modal.classList.add('hidden');
             }
 
             showGameBoard() {
@@ -3010,6 +3235,7 @@
             }
 
             showSharePainNotification(userName, targetName) {
+                this.playSound(this.lockSound);
                 return new Promise(resolve => {
                     const notification = document.createElement('div');
                     notification.className = 'share-pain-notification';
@@ -3204,7 +3430,41 @@
             }
         }
 
-        const game = new MultiplayerUnoGame();
+        // 等待所有資源載入完成後再初始化遊戲
+        function initializeGame() {
+            // 預載音頻檔案以避免首次播放延遲
+            const audioElements = [
+                'play-card-sound', 'draw-card-sound', 'uno-sound', 
+                'draw-two-sound', 'draw-four-sound', 'shield-sound', 
+                'share-pain-sound', 'skip-sound', 'lock-sound'
+            ];
+            
+            audioElements.forEach(id => {
+                const audio = document.getElementById(id);
+                if (audio) {
+                    audio.load();
+                }
+            });
+            
+            const game = new MultiplayerUnoGame();
+        }
+
+        // 確保DOM和資源完全載入後再初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                if (document.fonts && document.fonts.ready) {
+                    document.fonts.ready.then(initializeGame);
+                } else {
+                    setTimeout(initializeGame, 100);
+                }
+            });
+        } else {
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(initializeGame);
+            } else {
+                initializeGame();
+            }
+        }
 
     </script>
 </body>
